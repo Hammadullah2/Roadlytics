@@ -1,0 +1,97 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: road-quality-backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL}
+        NEXT_PUBLIC_MAP_TILE_URL: ${NEXT_PUBLIC_MAP_TILE_URL}
+    container_name: road-quality-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Optional inference stack — start with `docker compose --profile inference up`.
+  # Requires SentinelHub credentials in .env (SH_CLIENT_ID, SH_CLIENT_SECRET).
+  # Code lives in ./inference_server_project/, weights in ./weights/.
+  # Disabled by default so backend + frontend can be verified without the
+  # heavy Python/GDAL/CUDA dependencies.
+  # ──────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: road-quality-redis
+    profiles: ["inference"]
+    restart: unless-stopped
+
+  inference:
+    build:
+      context: ./inference_server_project
+      dockerfile: Dockerfile
+    container_name: road-quality-inference
+    profiles: ["inference"]
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DEVICE: ${INFERENCE_DEVICE:-cpu}
+      PLANET_API_KEY: ${PLANET_API_KEY:-}
+      SH_CLIENT_ID: ${SH_CLIENT_ID:-}
+      SH_CLIENT_SECRET: ${SH_CLIENT_SECRET:-}
+      SH_INSTANCE_ID: ${SH_INSTANCE_ID:-}
+      ARTIFACTS_DIR: /app/weights
+      OUTPUT_DIR: /app/outputs
+    volumes:
+      - ./weights:/app/weights:ro
+      - inference-outputs:/app/outputs
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  inference-worker:
+    build:
+      context: ./inference_server_project
+      dockerfile: Dockerfile
+    container_name: road-quality-inference-worker
+    profiles: ["inference"]
+    command: celery -A inference_server.api:celery_app worker --loglevel=info --concurrency=1
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DEVICE: ${INFERENCE_DEVICE:-cpu}
+      PLANET_API_KEY: ${PLANET_API_KEY:-}
+      SH_CLIENT_ID: ${SH_CLIENT_ID:-}
+      SH_CLIENT_SECRET: ${SH_CLIENT_SECRET:-}
+      SH_INSTANCE_ID: ${SH_INSTANCE_ID:-}
+      ARTIFACTS_DIR: /app/weights
+      OUTPUT_DIR: /app/outputs
+    volumes:
+      - ./weights:/app/weights:ro
+      - inference-outputs:/app/outputs
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  inference-outputs:
