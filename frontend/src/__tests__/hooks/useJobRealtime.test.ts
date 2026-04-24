@@ -1,107 +1,105 @@
-/** This test suite verifies the Supabase Realtime fallback hook subscription behavior. */
+/** Tests for the HTTP-polling job realtime hook. */
 import { act, renderHook, waitFor } from "@testing-library/react";
-import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
-import { useJobRealtime } from "@/hooks/useJobRealtime";
-import { supabase } from "@/lib/supabaseClient";
-
-jest.mock("@/lib/supabaseClient", () => ({
-  supabase: {
-    channel: jest.fn(),
-    removeChannel: jest.fn(),
+// Mock apiClient before anything imports it (prevents VITE_API_URL throw)
+jest.mock("@/lib/apiClient", () => ({
+  apiClient: {
+    get: jest.fn(),
   },
 }));
 
-const channelMock = {
-  on: jest.fn(),
-  subscribe: jest.fn(),
-};
+import { useJobRealtime } from "@/hooks/useJobRealtime";
+import { apiClient } from "@/lib/apiClient";
 
-const supabaseChannelMock = supabase.channel as jest.MockedFunction<typeof supabase.channel>;
-const removeChannelMock = supabase.removeChannel as jest.MockedFunction<typeof supabase.removeChannel>;
+const mockGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
+
+const makeJob = (overrides: Record<string, unknown> = {}) => ({
+  id: "job-42",
+  region_id: "region-1",
+  job_type: "full",
+  status: "pending",
+  progress: 0,
+  created_at: "2024-01-01T00:00:00Z",
+  started_at: null,
+  completed_at: null,
+  error_message: null,
+  ...overrides,
+});
 
 describe("useJobRealtime", () => {
-  let changeHandler: ((payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => void) | null = null;
-
   beforeEach(() => {
-    changeHandler = null;
-    channelMock.on.mockImplementation(
-      (
-        _event: string,
-        _filter: Record<string, string>,
-        handler: (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => void,
-      ) => {
-        changeHandler = handler;
-        return channelMock;
-      },
-    );
-    channelMock.subscribe.mockImplementation((handler: (status: "SUBSCRIBED") => void) => {
-      handler("SUBSCRIBED");
-      return channelMock;
-    });
-    supabaseChannelMock.mockReturnValue(channelMock as unknown as RealtimeChannel);
-    removeChannelMock.mockResolvedValue("ok");
+    jest.useFakeTimers();
+    mockGet.mockResolvedValue(makeJob());
   });
 
-  it("subscribes to the correct Supabase Realtime channel", async () => {
-    const { result } = renderHook(() => useJobRealtime("job-42"));
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
 
-    expect(supabaseChannelMock).toHaveBeenCalledWith("job-realtime-job-42");
-    expect(channelMock.on).toHaveBeenCalledWith(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "jobs",
-        filter: "id=eq.job-42",
-      },
-      expect.any(Function),
-    );
-
+  it("fetches job immediately on mount", async () => {
+    renderHook(() => useJobRealtime("job-42"));
     await waitFor(() => {
-      expect(result.current.isSubscribed).toBe(true);
+      expect(mockGet).toHaveBeenCalledWith("/jobs/job-42");
     });
   });
 
-  it("updates job state when a postgres_changes event arrives", async () => {
+  it("returns job data after first fetch", async () => {
+    mockGet.mockResolvedValue(makeJob({ status: "running", progress: 40 }));
     const { result } = renderHook(() => useJobRealtime("job-42"));
 
     await waitFor(() => {
-      expect(result.current.isSubscribed).toBe(true);
-    });
-
-    act(() => {
-      changeHandler?.({
-        schema: "public",
-        table: "jobs",
-        commit_timestamp: new Date().toISOString(),
-        eventType: "UPDATE",
-        errors: [],
-        new: {
-          id: "job-42",
-          region_id: "region-1",
-          job_type: "segmentation",
-          status: "running",
-          progress: 64,
-          created_at: new Date().toISOString(),
-          started_at: null,
-          completed_at: null,
-          error_message: null,
-        },
-        old: {},
-      } as unknown as RealtimePostgresChangesPayload<Record<string, unknown>>);
+      expect(result.current.job).not.toBeNull();
     });
 
     expect(result.current.job?.id).toBe("job-42");
-    expect(result.current.job?.progress).toBe(64);
+    expect(result.current.job?.progress).toBe(40);
     expect(result.current.job?.status).toBe("running");
+    expect(result.current.isSubscribed).toBe(true);
   });
 
-  it("unsubscribes from the channel on unmount", async () => {
+  it("polls again after 3 seconds", async () => {
+    renderHook(() => useJobRealtime("job-42"));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+
+    act(() => { jest.advanceTimersByTime(3000); });
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+  });
+
+  it("stops polling when job reaches completed status", async () => {
+    mockGet.mockResolvedValue(makeJob({ status: "running", progress: 50 }));
+    renderHook(() => useJobRealtime("job-42"));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+
+    mockGet.mockResolvedValue(makeJob({ status: "completed", progress: 100 }));
+    act(() => { jest.advanceTimersByTime(3000); });
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+
+    // No more calls after terminal state
+    act(() => { jest.advanceTimersByTime(9000); });
+    expect(mockGet).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops polling when job reaches failed status", async () => {
+    mockGet.mockResolvedValue(makeJob({ status: "failed", progress: 30 }));
+    renderHook(() => useJobRealtime("job-42"));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
+
+    act(() => { jest.advanceTimersByTime(9000); });
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fetch when jobID is empty", () => {
+    renderHook(() => useJobRealtime(""));
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it("clears interval on unmount", async () => {
     const { unmount } = renderHook(() => useJobRealtime("job-42"));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
 
     unmount();
-
-    expect(removeChannelMock).toHaveBeenCalledWith(channelMock);
+    act(() => { jest.advanceTimersByTime(9000); });
+    expect(mockGet).toHaveBeenCalledTimes(1);
   });
 });

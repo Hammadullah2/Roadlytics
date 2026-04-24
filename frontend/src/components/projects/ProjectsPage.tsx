@@ -43,15 +43,10 @@ const deriveProjectStatus = (statuses: string[]): string => {
 
 export const ProjectsPage = (): JSX.Element => {
   const navigate = useNavigate();
-  const { projects, isLoading: isProjectsLoading, error: projectsError, createProject } = useProjects();
+  const { projects, isLoading: isProjectsLoading, error: projectsError } = useProjects();
   const { regions, isLoading: isRegionsLoading, error: regionsError } = useRegions();
   const { records: jobRecords, isLoading: isJobsLoading, error: jobsError } = useJobRecords();
   const [search, setSearch] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [projectName, setProjectName] = useState("");
-  const [projectDescription, setProjectDescription] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
 
   const cards = projects
     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
@@ -73,25 +68,6 @@ export const ProjectsPage = (): JSX.Element => {
         route: `/projects/${project.id}`,
       };
     });
-
-  const handleCreate = async (): Promise<void> => {
-    if (!projectName.trim()) {
-      setCreateError("Project name is required.");
-      return;
-    }
-    setIsCreating(true);
-    setCreateError(null);
-    try {
-      await createProject(projectName.trim(), projectDescription.trim());
-      setProjectName("");
-      setProjectDescription("");
-      setShowCreate(false);
-    } catch (err: unknown) {
-      setCreateError(err instanceof Error ? err.message : "Failed to create project.");
-    } finally {
-      setIsCreating(false);
-    }
-  };
 
   return (
     <div>
@@ -115,55 +91,13 @@ export const ProjectsPage = (): JSX.Element => {
           <button
             className="btn btn-primary"
             type="button"
-            onClick={() => { setShowCreate(true); navigate("/map-analysis"); }}
+            onClick={() => { navigate("/projects/new"); }}
           >
             <PlusIcon />
             New Project
           </button>
         </div>
       </div>
-
-      {/* Create form (inline, only shown when triggered) */}
-      {showCreate && (
-        <div className="card card-pad" style={{ marginBottom: 24, maxWidth: 560 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Create New Project</h3>
-          {createError && (
-            <div style={{ marginBottom: 12, padding: "10px 14px", borderRadius: "var(--radius-btn)", background: "color-mix(in srgb, var(--danger) 10%, white)", color: "var(--danger)", fontSize: 13 }}>
-              {createError}
-            </div>
-          )}
-          <div className="stack" style={{ gap: 14 }}>
-            <div className="field">
-              <label htmlFor="proj-name">Project Name</label>
-              <input
-                id="proj-name"
-                type="text"
-                value={projectName}
-                onChange={(e) => { setProjectName(e.target.value); }}
-                placeholder="Sindh Rural Assessment 2026"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="proj-desc">Description</label>
-              <textarea
-                id="proj-desc"
-                value={projectDescription}
-                onChange={(e) => { setProjectDescription(e.target.value); }}
-                placeholder="Scope, district, or survey notes…"
-                style={{ minHeight: 80, resize: "vertical" }}
-              />
-            </div>
-            <div className="row" style={{ gap: 8 }}>
-              <button className="btn btn-primary" type="button" onClick={() => { void handleCreate(); }} disabled={isCreating}>
-                {isCreating ? "Creating…" : "Create Project"}
-              </button>
-              <button className="btn btn-ghost" type="button" onClick={() => { setShowCreate(false); setCreateError(null); }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <ProjectsGrid
         cards={cards}

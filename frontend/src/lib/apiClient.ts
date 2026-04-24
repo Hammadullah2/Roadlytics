@@ -59,7 +59,7 @@ const toPayload = <T,>(payload: unknown): T => {
 };
 
 const redirectToLogin = (): void => {
-  if (window.location.pathname !== "/login" && window.location.pathname !== "/login/admin") {
+  if (window.location.pathname !== "/login") {
     window.location.assign("/login");
   }
 };

@@ -138,9 +138,9 @@ export const DashboardPage = (): JSX.Element => {
     {
       icon: <MapPinPlusIcon />,
       title: "New Assessment",
-      desc: "Select a region on the map and run the AI pipeline.",
-      cta: "Open Map",
-      target: "/map-analysis",
+      desc: "Upload a 4-band GeoTIFF and run the AI pipeline.",
+      cta: "Upload GeoTIFF",
+      target: "/projects/new",
     },
     {
       icon: <FolderOpenIcon />,
@@ -148,6 +148,18 @@ export const DashboardPage = (): JSX.Element => {
       desc: "Browse and manage your assessment projects.",
       cta: "Browse",
       target: "/projects",
+    },
+    {
+      icon: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+          <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
+        </svg>
+      ),
+      title: "Map Analysis",
+      desc: "Inspect raster outputs and network metrics.",
+      cta: "Open Dashboard",
+      target: "/map-analysis",
     },
     {
       icon: <FileTextIcon />,
@@ -172,10 +184,10 @@ export const DashboardPage = (): JSX.Element => {
             Here's what's happening in your workspace today.
           </div>
         </div>
-        <button className="btn btn-primary" type="button" onClick={() => { navigate("/map-analysis"); }}>
+        <button className="btn btn-primary" type="button" onClick={() => { navigate("/projects/new"); }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 21C12 21 5 13.5 5 8a7 7 0 0 1 14 0c0 5.5-7 13-7 13z"/>
-            <line x1="12" y1="5" x2="12" y2="11"/><line x1="9" y1="8" x2="15" y2="8"/>
+            <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
           </svg>
           New Assessment
         </button>
@@ -183,7 +195,7 @@ export const DashboardPage = (): JSX.Element => {
 
       {/* Quick Actions */}
       <div className="section-label">Quick Actions</div>
-      <div className="rl-grid rl-grid-3" style={{ marginBottom: 32 }}>
+      <div className="rl-grid rl-grid-4" style={{ marginBottom: 32 }}>
         {quickActions.map((action) => (
           <div
             key={action.title}

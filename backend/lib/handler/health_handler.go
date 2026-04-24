@@ -211,8 +211,12 @@ func defaultStorageHealthProbe(_ context.Context, _ *http.Request) error {
 		return fmt.Errorf("storage client is not initialized")
 	}
 
-	if _, err := client.Storage.ListFiles("satellite-images", "", storage.FileSearchOptions{Limit: 1}); err != nil {
-		return fmt.Errorf("list files in satellite-images: %w", err)
+	bucket := strings.TrimSpace(os.Getenv("STORAGE_BUCKET_REPORTS"))
+	if bucket == "" {
+		bucket = "reports"
+	}
+	if _, err := client.Storage.ListFiles(bucket, "", storage.FileSearchOptions{Limit: 1}); err != nil {
+		return fmt.Errorf("list files in %s: %w", bucket, err)
 	}
 
 	return nil

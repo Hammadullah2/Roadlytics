@@ -34,7 +34,7 @@ services:
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
-      DEVICE: cpu
+      DEVICE: ${INFERENCE_DEVICE:-cpu}
     volumes:
       - ../weights:/app/weights:ro
       - inference-outputs:/app/outputs
@@ -58,7 +58,7 @@ services:
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
-      DEVICE: cpu
+      DEVICE: ${INFERENCE_DEVICE:-cpu}
     volumes:
       - ../weights:/app/weights:ro
       - inference-outputs:/app/outputs

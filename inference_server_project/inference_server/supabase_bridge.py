@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,7 +39,9 @@ def mark_job_running(backend_job_id: str, inference_job_id: str) -> None:
                 "status": "running",
                 "progress": 0,
                 "started_at": now,
-                "result_refs": json.dumps({"inference_job_id": inference_job_id}),
+                # Pass dict directly — PostgREST serialises it as a JSONB object.
+                # json.dumps() would store a JSONB string, breaking Go unmarshal.
+                "result_refs": {"inference_job_id": inference_job_id},
             }
         ).eq("id", backend_job_id).execute()
     except Exception as exc:
@@ -74,7 +75,9 @@ def mark_job_complete(backend_job_id: str, inference_job_id: str, result: dict, 
                 "status": "completed",
                 "progress": 100,
                 "completed_at": _now(),
-                "result_refs": json.dumps(result_refs),
+                # Pass dict directly — PostgREST serialises it as a JSONB object.
+                # json.dumps() would store a JSONB string, breaking Go unmarshal.
+                "result_refs": result_refs,
             }
         ).eq("id", backend_job_id).execute()
     except Exception as exc:

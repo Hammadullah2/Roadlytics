@@ -26,7 +26,8 @@ function BellIcon() {
 
 function buildBreadcrumbs(pathname: string): string[] {
   if (pathname === "/" || pathname === "/dashboard") return ["Dashboard"];
-  if (pathname.startsWith("/projects/") && pathname !== "/projects") return ["Projects", "Project Detail"];
+  if (pathname === "/projects/new") return ["Projects", "New Project"];
+  if (pathname.startsWith("/projects/") && pathname !== "/projects") return ["Projects", "Map Analysis Dashboard"];
   if (pathname === "/projects") return ["Projects"];
   if (pathname === "/map-analysis") return ["Map Analysis"];
   if (pathname === "/processing") return ["Processing"];

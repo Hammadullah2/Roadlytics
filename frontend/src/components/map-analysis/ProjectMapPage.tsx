@@ -1,20 +1,21 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { AssessmentMap } from "@/components/map/AssessmentMap";
 import type { ExternalLayerState } from "@/components/map/AssessmentMap";
 import { useJobRecords } from "@/hooks/useJobRecords";
 import { useJobResults } from "@/hooks/useJobResults";
+import { useProjects } from "@/hooks/useProjects";
 import { useRegions } from "@/hooks/useRegions";
 
+function ArrowLeftIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>;
+}
 function DownloadIcon() {
   return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>;
 }
 function FileTextIcon() {
   return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>;
-}
-function ArrowLeftIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>;
 }
 function CheckIcon({ size = 11 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>;
@@ -79,13 +80,15 @@ const formatMetricValue = (value: unknown): string => {
   return JSON.stringify(value);
 };
 
-export const MapAnalysisPage = (): JSX.Element => {
+export const ProjectMapPage = (): JSX.Element => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const requestedJobID = searchParams.get("job") ?? "";
+  const { id: projectId } = useParams<{ id: string }>();
 
-  const { regions, isLoading: isRegionsLoading } = useRegions();
+  const { projects } = useProjects();
+  const { regions, isLoading: isRegionsLoading } = useRegions({ projectId, enabled: Boolean(projectId) });
   const { records: jobRecords } = useJobRecords();
+
+  const project = projects.find((p) => p.id === projectId);
 
   const [layers, setLayers] = useState({
     osm: true,
@@ -109,18 +112,14 @@ export const MapAnalysisPage = (): JSX.Element => {
   const toggle = (k: keyof typeof layers) => setLayers((l) => ({ ...l, [k]: !l[k] }));
   const setOp = (k: keyof typeof opacities) => (v: number) => setOpacities((o) => ({ ...o, [k]: v }));
 
-  const selectableJobRecords = useMemo(() => {
-    const completed = jobRecords.filter((r) => r.job.status === "completed");
-    return completed.length > 0 ? completed : jobRecords;
-  }, [jobRecords]);
+  // Filter jobs to this project only
+  const projectJobRecords = useMemo(() => {
+    const all = jobRecords.filter((r) => r.project.id === projectId);
+    const completed = all.filter((r) => r.job.status === "completed");
+    return completed.length > 0 ? completed : all;
+  }, [jobRecords, projectId]);
 
-  const selectedRecord = useMemo(() => {
-    if (requestedJobID) {
-      const found = selectableJobRecords.find((r) => r.job.id === requestedJobID);
-      if (found) return found;
-    }
-    return selectableJobRecords[0] ?? null;
-  }, [requestedJobID, selectableJobRecords]);
+  const selectedRecord = projectJobRecords[0] ?? null;
 
   const { results, isLoading: isResultsLoading } = useJobResults(selectedRecord?.job.id ?? "");
   const downloads = selectedRecord?.job.result_refs?.downloads;
@@ -155,6 +154,37 @@ export const MapAnalysisPage = (): JSX.Element => {
     layers.connectivity && "Connectivity map",
   ].filter(Boolean) as string[];
 
+  if (!project && !isRegionsLoading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16, color: "var(--text-secondary)" }}>
+        <div style={{ fontSize: 14 }}>Project not found.</div>
+        <button className="btn btn-ghost btn-sm" type="button" onClick={() => navigate("/projects")}>
+          ← Back to Projects
+        </button>
+      </div>
+    );
+  }
+
+  if (projectJobRecords.length === 0 && !isRegionsLoading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16, color: "var(--text-secondary)", textAlign: "center" }}>
+        <div style={{ fontSize: 32 }}>🗺️</div>
+        <div style={{ fontWeight: 600, fontSize: 15 }}>No pipeline results yet</div>
+        <div style={{ fontSize: 13 }}>
+          {project?.name} has no completed jobs. Upload a GeoTIFF to run the AI pipeline.
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <button className="btn btn-ghost btn-sm" type="button" onClick={() => navigate("/projects")}>
+            <ArrowLeftIcon /> Projects
+          </button>
+          <button className="btn btn-primary btn-sm" type="button" onClick={() => navigate("/projects/new")}>
+            Upload GeoTIFF
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ height: "calc(100vh - 56px)", position: "relative", overflow: "hidden" }}>
       {isRegionsLoading ? (
@@ -173,21 +203,25 @@ export const MapAnalysisPage = (): JSX.Element => {
 
       {/* Header bar */}
       <div style={{ position: "absolute", top: 20, left: 20, right: 360, zIndex: 10, display: "flex", gap: 12, alignItems: "flex-start" }}>
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate("/projects")} style={{ background: "white", border: "1px solid var(--border)", boxShadow: "var(--shadow-soft)", whiteSpace: "nowrap" }}>
+        <button className="btn btn-ghost btn-sm" type="button" onClick={() => navigate("/projects")} style={{ background: "white", border: "1px solid var(--border)", boxShadow: "var(--shadow-soft)", whiteSpace: "nowrap" }}>
           <ArrowLeftIcon /> Projects
         </button>
-        {selectedRecord && (
+        {project && (
           <div style={{ background: "white", border: "1px solid var(--border)", borderRadius: "var(--radius-card)", boxShadow: "var(--shadow-soft)", padding: "8px 14px", flex: 1, maxWidth: 560 }}>
             <div className="row space-between">
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{selectedRecord.project.name} · {selectedRecord.region.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{project.name}</div>
                 <div className="muted mono" style={{ fontSize: 11, marginTop: 2 }}>
-                  Job {selectedRecord.job.id.slice(0, 8).toUpperCase()} · {formatDateTime(selectedRecord.job.created_at)}
+                  {selectedRecord
+                    ? `Job ${selectedRecord.job.id.slice(0, 8).toUpperCase()} · ${formatDateTime(selectedRecord.job.created_at)}`
+                    : "No jobs yet"}
                 </div>
               </div>
-              {selectedRecord.job.status === "completed"
+              {selectedRecord?.job.status === "completed"
                 ? <span className="pill pill-success"><CheckIcon size={11} />Pipeline complete</span>
-                : <span className="pill pill-warning"><span className="dot" />{selectedRecord.job.status}</span>}
+                : selectedRecord
+                  ? <span className="pill pill-warning"><span className="dot" />{selectedRecord.job.status}</span>
+                  : null}
             </div>
           </div>
         )}
@@ -253,7 +287,6 @@ export const MapAnalysisPage = (): JSX.Element => {
                   <MetricCard key={key} label={key.replace(/_/g, " ")} value={formatMetricValue(val)} />
                 ))}
               </div>
-
               {connectivityMetrics.length > 4 && (
                 <>
                   <div className="section-label" style={{ fontSize: 11, marginBottom: 8 }}>Additional Metrics</div>
@@ -270,23 +303,21 @@ export const MapAnalysisPage = (): JSX.Element => {
             </>
           )}
 
-          {selectableJobRecords.length > 1 && (
+          {projectJobRecords.length > 1 && (
             <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-              <div className="section-label" style={{ fontSize: 11, marginBottom: 8 }}>Switch Job</div>
-              <select value={selectedRecord?.job.id ?? ""} onChange={(e) => navigate(`/map-analysis?job=${e.target.value}`)} style={{ width: "100%", fontSize: 12 }}>
-                {selectableJobRecords.map((rec) => (
-                  <option key={rec.job.id} value={rec.job.id}>
-                    {rec.project.name} · {formatDateTime(rec.job.created_at)}
-                  </option>
-                ))}
-              </select>
+              <div className="section-label" style={{ fontSize: 11, marginBottom: 8 }}>Job results</div>
+              <div className="muted" style={{ fontSize: 12 }}>
+                {projectJobRecords.length} jobs — showing most recent
+              </div>
             </div>
           )}
         </div>
 
         <div style={{ padding: 12, borderTop: "1px solid var(--border)", display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" style={{ flex: 1 }}><DownloadIcon />GeoTIFF</button>
-          <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => navigate("/reports")}>
+          <button className="btn btn-secondary btn-sm" type="button" style={{ flex: 1 }}>
+            <DownloadIcon />GeoTIFF
+          </button>
+          <button className="btn btn-primary btn-sm" type="button" style={{ flex: 1 }} onClick={() => navigate("/reports")}>
             <FileTextIcon />Reports
           </button>
         </div>

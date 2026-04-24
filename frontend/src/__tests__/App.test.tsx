@@ -40,6 +40,14 @@ jest.mock("@/components/map-analysis/MapAnalysisPage", () => ({
   MapAnalysisPage: () => <div>map-analysis-page</div>,
 }));
 
+jest.mock("@/components/map-analysis/ProjectMapPage", () => ({
+  ProjectMapPage: () => <div>project-map-page</div>,
+}));
+
+jest.mock("@/components/projects/ProjectCreationPage", () => ({
+  ProjectCreationPage: () => <div>project-creation-page</div>,
+}));
+
 jest.mock("@/components/processing/ProcessingPage", () => ({
   ProcessingPage: () => <div>processing-page</div>,
 }));

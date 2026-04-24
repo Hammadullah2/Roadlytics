@@ -1,10 +1,10 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
+import { useProjects } from "@/hooks/useProjects";
 
-const NAV_ITEMS = [
+const STATIC_NAV = [
   { id: "dashboard", label: "Dashboard", icon: DashboardIcon, path: "/dashboard" },
   { id: "projects", label: "Projects", icon: FolderIcon, path: "/projects" },
-  { id: "map-analysis", label: "Map Analysis", icon: MapIcon, path: "/map-analysis" },
   { id: "processing", label: "Processing", icon: CpuIcon, path: "/processing" },
   { id: "reports", label: "Reports", icon: FileTextIcon, path: "/reports" },
 ];
@@ -87,19 +87,29 @@ function RoadlyticsLogo() {
 
 type SidebarProps = {
   isAdmin?: boolean;
+  userName?: string;
+  userInitials?: string;
 };
 
 function isPathActive(currentPath: string, navPath: string): boolean {
   if (navPath === "/dashboard") return currentPath === "/dashboard" || currentPath === "/";
+  if (navPath === "/projects") return currentPath === "/projects" || currentPath === "/projects/new";
+  if (navPath.startsWith("/projects/")) return currentPath.startsWith("/projects/") && currentPath !== "/projects" && currentPath !== "/projects/new";
   return currentPath.startsWith(navPath);
 }
 
-export const Sidebar = ({ isAdmin = false }: SidebarProps): JSX.Element => {
+export const Sidebar = ({ isAdmin = false, userName, userInitials }: SidebarProps): JSX.Element => {
   const location = useLocation();
   const navigate = useNavigate();
   const signOut = useAuthStore((state) => state.signOut);
   const guestMode = useAuthStore((state) => state.guestMode);
   const setGuestMode = useAuthStore((state) => state.setGuestMode);
+  const { projects } = useProjects();
+
+  const lastProjectId = projects.length > 0
+    ? [...projects].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0].id
+    : null;
+  const mapAnalysisPath = lastProjectId ? `/projects/${lastProjectId}` : "/map-analysis";
 
   const handleLogout = (): void => {
     void (async () => {
@@ -113,6 +123,13 @@ export const Sidebar = ({ isAdmin = false }: SidebarProps): JSX.Element => {
   };
 
   const isAdminActive = location.pathname.startsWith("/admin");
+  const isMapAnalysisActive = isPathActive(location.pathname, "/projects/");
+
+  const navItems = [
+    ...STATIC_NAV.slice(0, 2),
+    { id: "map-analysis", label: "Map Analysis", icon: MapIcon, path: mapAnalysisPath },
+    ...STATIC_NAV.slice(2),
+  ];
 
   return (
     <aside className="sidebar">
@@ -125,9 +142,11 @@ export const Sidebar = ({ isAdmin = false }: SidebarProps): JSX.Element => {
 
       <div className="nav-section">
         <div className="nav-label">Workspace</div>
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
-          const active = isPathActive(location.pathname, item.path);
+          const active = item.id === "map-analysis"
+            ? isMapAnalysisActive
+            : isPathActive(location.pathname, item.path);
           return (
             <button
               key={item.id}
@@ -157,10 +176,10 @@ export const Sidebar = ({ isAdmin = false }: SidebarProps): JSX.Element => {
 
         <div className="user-row">
           <div className="avatar">
-            {guestMode ? "G" : "AK"}
+            {guestMode ? "G" : (userInitials ?? "U")}
           </div>
           <div className="user-info">
-            <div className="name">{guestMode ? "Guest" : "Aiza Khan"}</div>
+            <div className="name">{guestMode ? "Guest" : (userName ?? "User")}</div>
             <div className="role">{isAdmin ? "Admin" : "Analyst"}</div>
           </div>
         </div>

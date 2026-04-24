@@ -292,24 +292,28 @@ export const AssessmentMap = ({
       : drawRegionReadyHint.replace("{count}", draftRegionPoints.length.toString());
 
   const containerClass = isFullscreen
-    ? "fixed inset-0 z-0 overflow-hidden bg-[color:var(--bg-secondary)]"
+    ? "absolute inset-0 z-0 overflow-hidden"
     : "relative h-[clamp(540px,80vh,960px)] overflow-hidden rounded-[2rem] border border-[color:var(--border-subtle)] bg-[color:var(--bg-secondary)]";
 
   return (
     <div className={containerClass}>
-      <LayersPanel
-        controller={controller}
-        drawRegionHint={drawRegionHint}
-        canCompleteDrawRegion={draftRegionPoints.length >= 3}
-        hasDrawRegion={hasDrawRegion}
-        onCompleteDrawRegion={handleCompleteDrawRegion}
-        onClearDrawRegion={handleClearDrawRegion}
-        onControllerChange={() => setControllerVersion((v) => v + 1)}
-      />
-      <RoadMetadataPanel
-        metadata={null}
-        emptyMessage="Road metadata will appear here when classification results are available."
-      />
+      {!externalLayers && (
+        <LayersPanel
+          controller={controller}
+          drawRegionHint={drawRegionHint}
+          canCompleteDrawRegion={draftRegionPoints.length >= 3}
+          hasDrawRegion={hasDrawRegion}
+          onCompleteDrawRegion={handleCompleteDrawRegion}
+          onClearDrawRegion={handleClearDrawRegion}
+          onControllerChange={() => setControllerVersion((v) => v + 1)}
+        />
+      )}
+      {!externalLayers && (
+        <RoadMetadataPanel
+          metadata={null}
+          emptyMessage="Road metadata will appear here when classification results are available."
+        />
+      )}
 
       <MapContainer
         center={[25.8943, 68.5247]}

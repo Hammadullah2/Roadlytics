@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
@@ -22,8 +22,12 @@ const FullscreenLoading = ({ label }: { label: string }): JSX.Element => {
   );
 };
 
+const MAP_ROUTE_RE = /^\/projects\/(?!new$)[^/]+$|^\/map-analysis$/;
+
 export const AppShell = ({ children }: AppShellProps): JSX.Element => {
+  const location = useLocation();
   const navigate = useNavigate();
+  const isMapRoute = MAP_ROUTE_RE.test(location.pathname);
   const signOut = useAuthStore((state) => state.signOut);
   const { user, session, isLoading: isAuthLoading, isAuthenticated, guestMode } = useAuth();
   const { profile, isLoading: isProfileLoading, error } = useProfile({
@@ -91,7 +95,7 @@ export const AppShell = ({ children }: AppShellProps): JSX.Element => {
 
   return (
     <div className="app">
-      <Sidebar isAdmin={isAdmin} />
+      <Sidebar isAdmin={isAdmin} userName={userName} userInitials={userInitials} />
       <div className="main">
         <Topbar
           userName={userName}
@@ -99,7 +103,7 @@ export const AppShell = ({ children }: AppShellProps): JSX.Element => {
           isAdmin={isAdmin}
           guestMode={guestMode}
         />
-        <div className="content">
+        <div className={`content${isMapRoute ? " no-padding" : ""}`}>
           {children}
         </div>
       </div>

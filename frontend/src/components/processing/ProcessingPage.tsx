@@ -1,13 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { useJobRealtime } from "@/hooks/useJobRealtime";
 import { useJobRecords } from "@/hooks/useJobRecords";
 import { useProjects } from "@/hooks/useProjects";
 import { useReportRecords } from "@/hooks/useReportRecords";
 import { useRegions } from "@/hooks/useRegions";
 import type { BackendJob, BackendReport } from "@/types";
 import { apiClient } from "@/lib/apiClient";
-import { useState } from "react";
 
 function CheckIcon({ size = 11 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>;
@@ -115,7 +115,7 @@ export const ProcessingPage = (): JSX.Element => {
       .sort((a, b) => new Date(b.job.created_at).getTime() - new Date(a.job.created_at).getTime());
   }, [jobRecords, projects, regions]);
 
-  const currentRun = useMemo(() => {
+  const currentRunBase = useMemo(() => {
     // Prefer the job from URL param, then latest running, then latest pending
     if (requestedJobID) {
       const found = allJobs.find((j) => j.job.id === requestedJobID);
@@ -125,6 +125,11 @@ export const ProcessingPage = (): JSX.Element => {
       allJobs.find((j) => j.job.status === "pending") ??
       allJobs[0] ?? null;
   }, [allJobs, requestedJobID]);
+
+  const { job: liveJob } = useJobRealtime(currentRunBase?.job.id ?? "");
+  const currentRun = currentRunBase && liveJob
+    ? { ...currentRunBase, job: liveJob }
+    : currentRunBase;
 
   const latestReportByJobID = useMemo(() => {
     const map = new Map<string, string>();
@@ -186,7 +191,7 @@ export const ProcessingPage = (): JSX.Element => {
               <div style={{ fontSize: 32, marginBottom: 12 }}>🚀</div>
               <div style={{ fontWeight: 600, marginBottom: 6 }}>No pipeline runs yet</div>
               <div style={{ fontSize: 13 }}>Create a new project and upload a GeoTIFF to get started.</div>
-              <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={() => navigate("/upload")}>
+              <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={() => navigate("/projects/new")}>
                 New Project
               </button>
             </div>
@@ -268,7 +273,11 @@ export const ProcessingPage = (): JSX.Element => {
               </div>
 
               <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => navigate(`/map-analysis?job=${currentRun.job.id}`)}>
+                <button className="btn btn-secondary btn-sm" onClick={() => {
+                  const jobRec = jobRecords.find((r) => r.job.id === currentRun.job.id);
+                  if (jobRec) navigate(`/projects/${jobRec.project.id}`);
+                  else navigate("/map-analysis");
+                }}>
                   <MapPinIcon />View on Map
                 </button>
                 {currentRun.job.status === "completed" && !latestReportByJobID.has(currentRun.job.id) && (
