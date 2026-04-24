@@ -54,7 +54,7 @@ services:
       dockerfile: inference_server_project/Dockerfile
     container_name: inference-worker
     restart: unless-stopped
-    command: celery -A inference_server.api:celery_app worker --loglevel=info --concurrency=1
+    command: celery -A inference_server.api:celery_app worker --loglevel=info --concurrency=1 --acks-late
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0
