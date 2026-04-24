@@ -1,0 +1,82 @@
+# VPS deployment — inference stack only.
+# Backend and frontend are deployed on Vercel; this file runs only the services
+# that must live on a persistent machine with access to GPU and model weights.
+#
+# Usage:
+#   cp .env.vps .env
+#   docker compose -f docker-compose.vps.yml up -d
+#
+# Prerequisites:
+#   - weights/ directory next to this file (or mount a different path via ARTIFACTS_DIR)
+#   - All required env vars set in .env (see .env.vps.example)
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: inference-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  inference:
+    build:
+      context: ..
+      dockerfile: inference_server_project/Dockerfile
+    container_name: inference-server
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"   # only exposed to localhost; nginx proxies externally
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DEVICE: cpu
+    volumes:
+      - ../weights:/app/weights:ro
+      - inference-outputs:/app/outputs
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://127.0.0.1:8000/api/health', timeout=5).raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  inference-worker:
+    build:
+      context: ..
+      dockerfile: inference_server_project/Dockerfile
+    container_name: inference-worker
+    restart: unless-stopped
+    command: celery -A inference_server.api:celery_app worker --loglevel=info --concurrency=1
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DEVICE: cpu
+    volumes:
+      - ../weights:/app/weights:ro
+      - inference-outputs:/app/outputs
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: inference-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - inference
+
+volumes:
+  redis-data:
+  inference-outputs:

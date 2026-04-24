@@ -1,0 +1,79 @@
+# Root docker-compose — inference stack only.
+#
+# The backend (Go API) and frontend (React/Vite) are deployed on Vercel.
+# Only the inference server, its Celery worker, and Redis need a persistent
+# Docker host (VPS with GPU access and local model weights).
+#
+# For VPS deployment use inference_server_project/docker-compose.vps.yml which
+# also includes nginx with TLS termination.  This file is provided for local
+# end-to-end development of the full stack.
+#
+# Usage (local dev — all services):
+#   docker compose up
+#
+# Usage (inference only, no frontend/backend containers):
+#   docker compose up redis inference inference-worker
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: road-quality-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  inference:
+    build:
+      context: ./inference_server_project
+      dockerfile: Dockerfile
+    container_name: road-quality-inference
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DEVICE: ${INFERENCE_DEVICE:-cpu}
+      ARTIFACTS_DIR: /app/weights
+      OUTPUT_DIR: /app/outputs
+    volumes:
+      - ./weights:/app/weights:ro
+      - inference-outputs:/app/outputs
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  inference-worker:
+    build:
+      context: ./inference_server_project
+      dockerfile: Dockerfile
+    container_name: road-quality-inference-worker
+    command: celery -A inference_server.api:celery_app worker --loglevel=info --concurrency=1
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DEVICE: ${INFERENCE_DEVICE:-cpu}
+      ARTIFACTS_DIR: /app/weights
+      OUTPUT_DIR: /app/outputs
+    volumes:
+      - ./weights:/app/weights:ro
+      - inference-outputs:/app/outputs
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  inference-outputs:

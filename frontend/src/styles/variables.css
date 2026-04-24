@@ -1,0 +1,32 @@
+:root {
+  --bg-primary: #FAF6F1;
+  --bg-secondary: #F2EBE3;
+  --bg-tertiary: #E8DFD5;
+  --surface: #FFFFFF;
+  --border: #D4C9BD;
+  --text-primary: #2C2418;
+  --text-secondary: #7A6E62;
+  --accent: #B8763E;
+  --accent-hover: #9E6432;
+  --accent-subtle: #F5E6D3;
+  --success: #5B8C5A;
+  --warning: #D4A843;
+  --danger: #C25B4E;
+  --info: #5A8FA8;
+
+  --shadow-soft: 0 2px 8px rgba(44,36,24,0.06);
+  --shadow-elev: 0 8px 24px rgba(44,36,24,0.10);
+
+  --radius-card: 12px;
+  --radius-btn: 8px;
+  --radius-pill: 20px;
+
+  /* Legacy aliases kept for any un-migrated components */
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F2EBE3;
+  --border-subtle: #D4C9BD;
+  --accent-green: #B8763E;
+  --accent-green-hover: #9E6432;
+  --dot-green: #5B8C5A;
+  --text-nav-label: #7A6E62;
+}

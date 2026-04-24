@@ -1,0 +1,69 @@
+# Secrets — never commit
+.env
+env
+
+# Large binary / data files — use Git LFS or external storage
+weights/
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+*.so
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+.pnpm-store/
+
+# Go build artifacts
+backend/bin/
+backend/*.exe
+*.test
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Output dirs (generated at runtime)
+road_pipeline/output/
+inference_server_project/output/
+celerybeat-schedule
+*.pid
+
+# Claude Code internal
+.claude/
+
+# Ignore all markdown files except README
+*.md
+!README.md
+!readme.md
+!Readme.md
+
+# Ignore all environment files
+*.env
+.env.*
