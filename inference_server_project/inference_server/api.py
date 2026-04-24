@@ -22,6 +22,8 @@ celery_app = Celery("inference", broker=settings.redis_url,
 celery_app.conf.task_serializer = "json"
 celery_app.conf.result_serializer = "json"
 celery_app.conf.accept_content = ["json"]
+celery_app.conf.task_acks_late = True
+celery_app.conf.worker_prefetch_multiplier = 1
 
 
 pipeline: Optional[InferencePipeline] = None
