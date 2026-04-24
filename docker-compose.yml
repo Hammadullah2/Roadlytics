@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: roadlytics-backend
+    ports:
+      - "8000:8000"
+    environment:
+      AZURE_STORAGE_CONNECTION_STRING: ${AZURE_STORAGE_CONNECTION_STRING:-}
+      AZURE_STORAGE_CONTAINER: ${AZURE_STORAGE_CONTAINER:-roadlytics}
+      DRIVE_ROOT: /app
+      ROADLYTICS_DEBUG: ${ROADLYTICS_DEBUG:-false}
+      ROADLYTICS_WORKER_CONCURRENCY: ${ROADLYTICS_WORKER_CONCURRENCY:-1}
+      ROADLYTICS_MODEL_WEIGHTS_DIR: /app/model_weights
+      ROADLYTICS_OSM_DIR: /app/data/osm_roads
+      ROADLYTICS_SEG_WEIGHTS: ${ROADLYTICS_SEG_WEIGHTS:-}
+      ROADLYTICS_CLS_WEIGHTS: ${ROADLYTICS_CLS_WEIGHTS:-}
+    volumes:
+      - ./backend/data:/app/backend/data
+      - ./model_weights:/app/model_weights:ro
+      - ./data/osm_roads:/app/data/osm_roads:ro
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_BASEMAP_TILE_URL: ${NEXT_PUBLIC_BASEMAP_TILE_URL:-https://tile.openstreetmap.org/{z}/{x}/{y}.png}
+        NEXT_PUBLIC_BASEMAP_ATTRIBUTION: ${NEXT_PUBLIC_BASEMAP_ATTRIBUTION:-&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors}
+    container_name: roadlytics-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

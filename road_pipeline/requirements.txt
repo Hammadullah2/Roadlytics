@@ -1,0 +1,19 @@
+# Road Pipeline — Python dependencies
+# Install with:  pip install -r requirements.txt
+# GDAL must be installed at OS level first:
+#   Ubuntu/Debian: apt-get install -y gdal-bin libgdal-dev
+
+rasterio>=1.3
+segmentation-models-pytorch==0.3.3
+torch>=2.0
+torchvision>=0.15
+albumentations>=1.3
+geopandas>=0.13
+shapely>=2.0
+pyproj>=3.5
+fiona>=1.9
+numpy>=1.24
+opencv-python>=4.8
+scikit-learn>=1.3
+tqdm>=4.65
+scipy>=1.10

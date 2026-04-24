@@ -1,0 +1,161 @@
+"use client";
+
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+
+import { getAnalytics, getJob, listJobs, reportUrl } from "@/lib/api";
+import type { AnalyticsResponse, JobDetail } from "@/lib/types";
+import { formatBytes, formatDate } from "@/lib/utils";
+
+function ReportsPageContent() {
+  const searchParams = useSearchParams();
+  const initialJobId = searchParams.get("jobId");
+
+  const [jobId, setJobId] = useState<string | null>(initialJobId);
+  const [job, setJob] = useState<JobDetail | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialJobId) {
+      setJobId(initialJobId);
+      return;
+    }
+    let cancelled = false;
+    listJobs(25)
+      .then((response) => {
+        if (!cancelled) {
+          setJobId(response.jobs.find((candidate) => candidate.status === "completed")?.id ?? null);
+        }
+      })
+      .catch((caughtError) => {
+        if (!cancelled) {
+          setError(caughtError instanceof Error ? caughtError.message : "Unable to load jobs.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialJobId]);
+
+  useEffect(() => {
+    if (!jobId) {
+      return;
+    }
+    let cancelled = false;
+    Promise.all([getJob(jobId), getAnalytics(jobId)])
+      .then(([nextJob, nextAnalytics]) => {
+        if (!cancelled) {
+          setJob(nextJob);
+          setAnalytics(nextAnalytics);
+        }
+      })
+      .catch((caughtError) => {
+        if (!cancelled) {
+          setError(caughtError instanceof Error ? caughtError.message : "Unable to load report data.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId]);
+
+  const summary = analytics?.summary ?? {};
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1>Reports</h1>
+          <p>
+            Review the generated HTML report, download GeoTIFF and shapefile outputs, and inspect
+            connectivity summary metrics for a completed assessment.
+          </p>
+        </div>
+        {job ? <div className="header-chip">{job.project_name}</div> : null}
+      </div>
+
+      {error ? <div className="error-text">{error}</div> : null}
+
+      {!job ? (
+        <div className="empty-state">
+          No completed job is selected yet. Run an assessment first, then reopen Reports using
+          a job link or `?jobId=...`.
+        </div>
+      ) : (
+        <div className="grid">
+          <section className="metric-grid">
+            <div className="mini-metric">
+              <span>Connected Components</span>
+              <strong>{String(summary.component_count ?? summary.total_components ?? 0)}</strong>
+            </div>
+            <div className="mini-metric">
+              <span>Isolated Components</span>
+              <strong>{String(summary.isolated_components ?? 0)}</strong>
+            </div>
+            <div className="mini-metric">
+              <span>Largest Component (km)</span>
+              <strong>{String(summary.largest_component_length_km ?? 0)}</strong>
+            </div>
+            <div className="mini-metric">
+              <span>Critical Junctions</span>
+              <strong>{String(summary.critical_junction_count ?? summary.critical_junctions ?? 0)}</strong>
+            </div>
+          </section>
+
+          <section className="grid grid-2">
+            <article className="card">
+              <span className="eyebrow">Downloads</span>
+              <h2 style={{ margin: "8px 0 16px", fontFamily: "var(--font-serif)" }}>
+                Report bundle
+              </h2>
+              <div className="timeline">
+                {job.artifacts.filter((artifact) => artifact.is_download).map((artifact) => (
+                  <div className="timeline-item" key={artifact.id}>
+                    <div className="timeline-dot" />
+                    <div className="timeline-copy">
+                      <strong>{artifact.label}</strong>
+                      <div className="helper">
+                        {artifact.filename} - {formatBytes(artifact.size_bytes)}
+                      </div>
+                      {artifact.download_url ? (
+                        <a className="button ghost" href={artifact.download_url}>
+                          Download
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="footer-note">Completed {formatDate(job.completed_at)}</div>
+            </article>
+
+            <article className="card">
+              <span className="eyebrow">Narrative Summary</span>
+              <h2 style={{ margin: "8px 0 12px", fontFamily: "var(--font-serif)" }}>
+                Embedded report
+              </h2>
+              <p className="helper">
+                The HTML report is generated by the backend after artifacts are packaged and can
+                be shared or hosted alongside the rest of the Roadlytics outputs.
+              </p>
+              <iframe
+                className="report-frame"
+                src={reportUrl(job.id)}
+                title={`${job.project_name} report`}
+              />
+            </article>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={<div className="empty-state">Loading reports...</div>}>
+      <ReportsPageContent />
+    </Suspense>
+  );
+}
