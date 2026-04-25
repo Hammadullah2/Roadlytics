@@ -218,6 +218,19 @@ class Repository:
             jobs.append(data)
         return jobs
 
+    def list_recoverable_jobs(self) -> List[Dict[str, Any]]:
+        with self._lock, self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM jobs
+                WHERE status IN ('queued', 'running')
+                  AND stage NOT IN ('completed', 'failed')
+                ORDER BY created_at ASC
+                """
+            ).fetchall()
+        return [job for row in rows if (job := self._row_to_job(row)) is not None]
+
     def job_counts(self) -> Dict[str, int]:
         with self._lock, self.connect() as connection:
             rows = connection.execute(
@@ -350,4 +363,3 @@ class Repository:
         if row is None:
             return {}
         return json.loads(row["summary_json"])
-

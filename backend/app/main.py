@@ -25,6 +25,13 @@ async def lifespan(app: FastAPI):
     processor = JobProcessor(settings, repository, storage)
     worker = WorkerService(settings.worker_concurrency, processor)
     await worker.start()
+    for job in repository.list_recoverable_jobs():
+        await worker.submit(job["id"])
+        repository.add_event(
+            job["id"],
+            job["stage"],
+            "Job re-queued after backend startup.",
+        )
 
     app.state.settings = settings
     app.state.repository = repository
@@ -47,4 +54,3 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(api_router, prefix=get_settings().api_prefix)
-
