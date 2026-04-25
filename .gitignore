@@ -64,6 +64,10 @@ celerybeat-schedule
 !readme.md
 !Readme.md
 
+# LLM / AI session artifacts — do not commit
+frontend-tests/
+testing/*.tif
+
 # Ignore all environment files
 *.env
 .env.*
