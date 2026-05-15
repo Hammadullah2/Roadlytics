@@ -33,10 +33,15 @@ an Azure Ubuntu VM with Docker Compose.
 8. Copy `.env.vm.example` to `.env.vm` and fill the real values
 9. Run `bash deploy/azure/deploy.sh`
 
+Optional assistant setup:
+
+- Add `GEMINI_API_KEY` to `/opt/roadlytics/deploy/azure/.env.vm`
+- Keep `ROADLYTICS_ASSISTANT_MODEL=gemini-2.5-flash` for the free-tier friendly default
+- Rebuild the backend after adding assistant dependencies: `bash deploy/azure/deploy.sh`
+
 ## Azure resources you need
 
 - 1 Ubuntu VM
 - 1 Storage Account
 - 1 Blob container for Roadlytics artifacts
 - 1 public IP or DNS name for the VM
-

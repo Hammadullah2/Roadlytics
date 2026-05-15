@@ -32,6 +32,11 @@ class Settings:
     tile_cache_max_age: int
     blob_connection_string: str
     blob_container: str
+    gemini_api_key: str
+    assistant_model: str
+    assistant_embedding_model: str
+    assistant_chroma_path: Path
+    assistant_max_context_chars: int
 
     @property
     def storage_mode(self) -> str:
@@ -45,6 +50,7 @@ class Settings:
             self.local_storage_root / "uploads",
             self.local_storage_root / "jobs",
             self.local_storage_root / "reports",
+            self.assistant_chroma_path,
         ):
             path.mkdir(parents=True, exist_ok=True)
 
@@ -74,7 +80,18 @@ def get_settings() -> Settings:
         tile_cache_max_age=int(os.environ.get("ROADLYTICS_TILE_CACHE_MAX_AGE", "300")),
         blob_connection_string=os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "").strip(),
         blob_container=os.environ.get("AZURE_STORAGE_CONTAINER", "roadlytics"),
+        gemini_api_key=os.environ.get("GEMINI_API_KEY", "").strip(),
+        assistant_model=os.environ.get("ROADLYTICS_ASSISTANT_MODEL", "gemini-2.5-flash"),
+        assistant_embedding_model=os.environ.get(
+            "ROADLYTICS_ASSISTANT_EMBEDDING_MODEL",
+            "gemini-embedding-001",
+        ),
+        assistant_chroma_path=Path(
+            os.environ.get("ROADLYTICS_ASSISTANT_CHROMA_PATH", data_root / "chroma")
+        ),
+        assistant_max_context_chars=int(
+            os.environ.get("ROADLYTICS_ASSISTANT_MAX_CONTEXT_CHARS", "18000")
+        ),
     )
     settings.ensure_directories()
     return settings
-

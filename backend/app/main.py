@@ -11,6 +11,7 @@ from .api.router import api_router
 from .config import get_settings
 from .database import Repository
 from .services.jobs import JobProcessor, JobService
+from .services.assistant import AssistantService
 from .services.worker import WorkerService
 from .storage import build_storage_backend
 
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
     repository.initialize()
     storage = build_storage_backend(settings)
     job_service = JobService(settings, repository, storage)
+    assistant_service = AssistantService(settings, repository)
     processor = JobProcessor(settings, repository, storage)
     worker = WorkerService(settings.worker_concurrency, processor)
     await worker.start()
@@ -37,6 +39,7 @@ async def lifespan(app: FastAPI):
     app.state.repository = repository
     app.state.storage = storage
     app.state.job_service = job_service
+    app.state.assistant_service = assistant_service
     app.state.worker = worker
 
     try:

@@ -12,6 +12,7 @@ import {
   useMap,
 } from "react-leaflet";
 
+import { AssistantDrawer } from "@/components/assistant-drawer";
 import { BASEMAP_ATTRIBUTION, BASEMAP_TILE_URL } from "@/lib/config";
 import type { JobDetail, LayerModel } from "@/lib/types";
 
@@ -77,115 +78,127 @@ export default function MapAnalysis({ job }: { job: JobDetail }) {
     job.layers.find((layer) => layer.name === "sentinel")?.bounds ??
     job.bounds ??
     undefined;
+  const activeLayerNames = Object.entries(visibleLayers)
+    .filter(([, visible]) => visible)
+    .map(([name]) => name);
 
   return (
-    <div className="map-shell">
-      <div className="card map-panel">
-        <div className="page-header" style={{ marginBottom: 18 }}>
-          <div>
-            <h2 style={{ margin: 0, fontFamily: "var(--font-serif)" }}>Layer Controls</h2>
-            <p>
-              OSM stays fixed at the base. Sentinel RGB and all generated masks can be toggled
-              independently on top.
-            </p>
+    <>
+      <AssistantDrawer
+        job={job}
+        mode="map"
+        title="Map Copilot"
+        visibleLayers={activeLayerNames}
+        viewportBounds={focusBounds ?? null}
+      />
+      <div className="map-shell">
+        <div className="card map-panel">
+          <div className="page-header" style={{ marginBottom: 18 }}>
+            <div>
+              <h2 style={{ margin: 0, fontFamily: "var(--font-serif)" }}>Layer Controls</h2>
+              <p>
+                OSM stays fixed at the base. Sentinel RGB and all generated masks can be toggled
+                independently on top.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="layer-list">
-          {rasterLayers.map((layer) => (
-            <label className="layer-toggle" key={layer.name}>
-              <div className="layer-meta">
-                <span
-                  className="swatch"
-                  style={{
-                    background: layer.legend_color ?? "linear-gradient(135deg, #b8763e, #f0c419)",
-                  }}
+          <div className="layer-list">
+            {rasterLayers.map((layer) => (
+              <label className="layer-toggle" key={layer.name}>
+                <div className="layer-meta">
+                  <span
+                    className="swatch"
+                    style={{
+                      background: layer.legend_color ?? "linear-gradient(135deg, #b8763e, #f0c419)",
+                    }}
+                  />
+                  <div>
+                    <strong>{layer.label}</strong>
+                    <div className="helper">Opacity {Math.round(layer.opacity * 100)}%</div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={Boolean(visibleLayers[layer.name])}
+                  onChange={(event) =>
+                    setVisibleLayers((current) => ({
+                      ...current,
+                      [layer.name]: event.target.checked,
+                    }))
+                  }
                 />
-                <div>
-                  <strong>{layer.label}</strong>
-                  <div className="helper">Opacity {Math.round(layer.opacity * 100)}%</div>
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={Boolean(visibleLayers[layer.name])}
-                onChange={(event) =>
-                  setVisibleLayers((current) => ({
-                    ...current,
-                    [layer.name]: event.target.checked,
-                  }))
-                }
-              />
-            </label>
-          ))}
+              </label>
+            ))}
 
-          {vectorLayers.map((layer) => (
-            <label className="layer-toggle" key={layer.name}>
-              <div className="layer-meta">
-                <span className="swatch" style={{ background: layer.legend_color ?? "#c95a27" }} />
-                <div>
-                  <strong>{layer.label}</strong>
-                  <div className="helper">GeoJSON overlay</div>
+            {vectorLayers.map((layer) => (
+              <label className="layer-toggle" key={layer.name}>
+                <div className="layer-meta">
+                  <span className="swatch" style={{ background: layer.legend_color ?? "#c95a27" }} />
+                  <div>
+                    <strong>{layer.label}</strong>
+                    <div className="helper">GeoJSON overlay</div>
+                  </div>
                 </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={Boolean(visibleLayers[layer.name])}
-                onChange={(event) =>
-                  setVisibleLayers((current) => ({
-                    ...current,
-                    [layer.name]: event.target.checked,
-                  }))
-                }
-              />
-            </label>
-          ))}
-        </div>
-
-        <div className="map-note">
-          <strong>{job.project_name}</strong>
-          <div className="helper">
-            Segmenter: {job.segmenter} | Classifier: {job.classifier}
+                <input
+                  type="checkbox"
+                  checked={Boolean(visibleLayers[layer.name])}
+                  onChange={(event) =>
+                    setVisibleLayers((current) => ({
+                      ...current,
+                      [layer.name]: event.target.checked,
+                    }))
+                  }
+                />
+              </label>
+            ))}
           </div>
-          <div className="helper">Job stage: {job.stage}</div>
+
+          <div className="map-note">
+            <strong>{job.project_name}</strong>
+            <div className="helper">
+              Segmenter: {job.segmenter} | Classifier: {job.classifier}
+            </div>
+            <div className="helper">Job stage: {job.stage}</div>
+          </div>
+        </div>
+
+        <div className="map-frame">
+          <MapContainer center={[24.8607, 67.0011]} zoom={11} scrollWheelZoom>
+            <BoundsController bounds={focusBounds} />
+            <TileLayer
+              attribution={BASEMAP_ATTRIBUTION}
+              url={BASEMAP_TILE_URL}
+            />
+
+            {rasterLayers.map((layer) =>
+              visibleLayers[layer.name] && layer.tiles_url ? (
+                <TileLayer
+                  key={layer.name}
+                  url={layer.tiles_url}
+                  opacity={layer.opacity}
+                  attribution="Roadlytics"
+                />
+              ) : null,
+            )}
+
+            {visibleLayers.critical_junctions && criticalJunctions ? (
+              <GeoJSON
+                data={criticalJunctions}
+                pointToLayer={(_, latlng) =>
+                  circleMarker(latlng, {
+                    radius: 6,
+                    color: "#8d320f",
+                    weight: 2,
+                    fillColor: "#f0a25d",
+                    fillOpacity: 0.85,
+                  })
+                }
+              />
+            ) : null}
+          </MapContainer>
         </div>
       </div>
-
-      <div className="map-frame">
-        <MapContainer center={[24.8607, 67.0011]} zoom={11} scrollWheelZoom>
-          <BoundsController bounds={focusBounds} />
-          <TileLayer
-            attribution={BASEMAP_ATTRIBUTION}
-            url={BASEMAP_TILE_URL}
-          />
-
-          {rasterLayers.map((layer) =>
-            visibleLayers[layer.name] && layer.tiles_url ? (
-              <TileLayer
-                key={layer.name}
-                url={layer.tiles_url}
-                opacity={layer.opacity}
-                attribution="Roadlytics"
-              />
-            ) : null,
-          )}
-
-          {visibleLayers.critical_junctions && criticalJunctions ? (
-            <GeoJSON
-              data={criticalJunctions}
-              pointToLayer={(_, latlng) =>
-                circleMarker(latlng, {
-                  radius: 6,
-                  color: "#8d320f",
-                  weight: 2,
-                  fillColor: "#f0a25d",
-                  fillOpacity: 0.85,
-                })
-              }
-            />
-          ) : null}
-        </MapContainer>
-      </div>
-    </div>
+    </>
   );
 }

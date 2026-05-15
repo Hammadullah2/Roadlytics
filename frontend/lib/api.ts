@@ -1,5 +1,7 @@
 import type {
   AnalyticsResponse,
+  AssistantChatRequest,
+  AssistantChatResponse,
   JobDetail,
   JobsResponse,
   UploadInitResponse,
@@ -39,6 +41,13 @@ export async function getJob(jobId: string) {
 
 export async function getAnalytics(jobId: string) {
   return requestJson<AnalyticsResponse>(`/api/jobs/${jobId}/analytics`);
+}
+
+export async function chatWithAssistant(payload: AssistantChatRequest) {
+  return requestJson<AssistantChatResponse>(`/api/assistant/chat`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function initUpload(file: File) {

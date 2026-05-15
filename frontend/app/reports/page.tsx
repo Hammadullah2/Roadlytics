@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { AssistantDrawer } from "@/components/assistant-drawer";
 import { getAnalytics, getJob, listJobs, reportUrl } from "@/lib/api";
 import type { AnalyticsResponse, JobDetail } from "@/lib/types";
 import { formatBytes, formatDate } from "@/lib/utils";
@@ -84,6 +85,8 @@ function ReportsPageContent() {
         </div>
       ) : (
         <div className="grid">
+          <AssistantDrawer job={job} mode="reports" title="Report Copilot" />
+
           <section className="metric-grid">
             <div className="mini-metric">
               <span>Connected Components</span>
