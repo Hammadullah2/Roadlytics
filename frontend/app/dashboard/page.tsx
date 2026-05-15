@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { AssistantDrawer } from "@/components/assistant-drawer";
 import { JobsTable } from "@/components/jobs-table";
 import { listJobs } from "@/lib/api";
 import type { JobsResponse } from "@/lib/types";
@@ -35,6 +36,8 @@ export default function DashboardPage() {
 
   return (
     <>
+      <AssistantDrawer mode="project_library" title="Workspace Copilot" />
+
       <div className="page-header">
         <div>
           <h1>Road condition intelligence, mapped into one workspace.</h1>

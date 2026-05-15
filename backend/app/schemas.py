@@ -110,3 +110,46 @@ class AnalyticsResponse(BaseModel):
     job_id: str
     summary: Dict[str, Any]
 
+
+AssistantMode = Literal[
+    "current_job",
+    "project_library",
+    "map",
+    "reports",
+    "failure_help",
+    "comparison",
+    "knowledge",
+]
+
+
+class AssistantChatRequest(BaseModel):
+    message: str
+    mode: AssistantMode = Field(default="current_job")
+    job_id: Optional[str] = None
+    comparison_job_id: Optional[str] = None
+    visible_layers: List[str] = Field(default_factory=list)
+    viewport_bounds: Optional[List[float]] = None
+    conversation_id: Optional[str] = None
+
+
+class AssistantCitation(BaseModel):
+    label: str
+    source: str
+    detail: Optional[str] = None
+
+
+class AssistantChatResponse(BaseModel):
+    message_id: str
+    answer: str
+    citations: List[AssistantCitation] = Field(default_factory=list)
+    suggested_questions: List[str] = Field(default_factory=list)
+    recommended_actions: List[str] = Field(default_factory=list)
+    limitations: List[str] = Field(default_factory=list)
+    confidence: Literal["low", "medium", "high"] = "medium"
+    provider: str
+    model: str
+    created_at: str
+
+
+class AssistantSuggestionResponse(BaseModel):
+    suggestions: List[str]

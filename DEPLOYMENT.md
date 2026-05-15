@@ -36,6 +36,15 @@ tile URL configurable through:
 - `NEXT_PUBLIC_BASEMAP_TILE_URL`
 - `NEXT_PUBLIC_BASEMAP_ATTRIBUTION`
 
+## Assistant RAG
+
+Roadlytics includes an optional Gemini-powered assistant for job summaries, map
+layer explanations, report drafting, and failure help. Add `GEMINI_API_KEY` to
+`deploy/azure/.env.vm` to enable Gemini generation. Without the key, the drawer
+still uses local evidence retrieval with a simpler fallback answer.
+
+See [docs/assistant-rag.md](/C:/Users/hammad/Roadlytics/docs/assistant-rag.md) for the manual setup steps.
+
 ## PakOSM data
 
 Place the Pakistan OSM roads shapefile set in `data/osm_roads/` using the filename stem:

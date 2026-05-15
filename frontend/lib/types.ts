@@ -86,3 +86,40 @@ export interface UploadInitResponse {
   transport: UploadTransport;
 }
 
+export type AssistantMode =
+  | "current_job"
+  | "project_library"
+  | "map"
+  | "reports"
+  | "failure_help"
+  | "comparison"
+  | "knowledge";
+
+export interface AssistantCitation {
+  label: string;
+  source: string;
+  detail?: string | null;
+}
+
+export interface AssistantChatRequest {
+  message: string;
+  mode: AssistantMode;
+  job_id?: string | null;
+  comparison_job_id?: string | null;
+  visible_layers?: string[];
+  viewport_bounds?: number[] | null;
+  conversation_id?: string | null;
+}
+
+export interface AssistantChatResponse {
+  message_id: string;
+  answer: string;
+  citations: AssistantCitation[];
+  suggested_questions: string[];
+  recommended_actions: string[];
+  limitations: string[];
+  confidence: "low" | "medium" | "high";
+  provider: string;
+  model: string;
+  created_at: string;
+}
