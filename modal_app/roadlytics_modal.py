@@ -36,8 +36,6 @@ image = (
     )
     .pip_install_from_requirements(str(REPO_ROOT / "road_pipeline" / "requirements.txt"))
     .pip_install_from_requirements(str(REPO_ROOT / "backend" / "requirements.txt"))
-    .add_local_dir(str(REPO_ROOT / "road_pipeline"), remote_path="/app/road_pipeline")
-    .add_local_dir(str(REPO_ROOT / "backend"), remote_path="/app/backend")
     .env(
         {
             "DRIVE_ROOT": "/app",
@@ -49,6 +47,8 @@ image = (
             "ROADLYTICS_ASSISTANT_CHROMA_PATH": "/tmp/roadlytics/chroma",
         }
     )
+    .add_local_dir(str(REPO_ROOT / "road_pipeline"), remote_path="/app/road_pipeline")
+    .add_local_dir(str(REPO_ROOT / "backend"), remote_path="/app/backend")
 )
 
 app = modal.App("roadlytics-inference", image=image)
