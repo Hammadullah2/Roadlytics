@@ -32,6 +32,7 @@ from ..services.validation import (
     validate_sentinel_l2,
     write_cog_or_copy,
 )
+from ..services.modal_runner import ModalPipelineRunner
 from ..storage.backends import LocalStorageBackend, StorageBackend
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -352,7 +353,10 @@ class JobService:
         local_path = report.get("local_path")
         if local_path and Path(local_path).exists():
             return Path(local_path).read_text(encoding="utf-8")
-        raise FileNotFoundError("Report file is unavailable on local storage.")
+
+        cache_path = self.settings.work_root / job_id / "reports" / "report.html"
+        self.storage.download_file(str(report["blob_path"]), cache_path)
+        return cache_path.read_text(encoding="utf-8")
 
     def get_local_file_path(self, storage_path: str) -> Path:
         if not isinstance(self.storage, LocalStorageBackend):
@@ -414,7 +418,160 @@ class JobProcessor:
             }
         )
 
+    def _register_remote_artifact(self, job_id: str, artifact: Dict[str, Any]) -> None:
+        self.repository.add_artifact(
+            {
+                "id": str(uuid.uuid4()),
+                "job_id": job_id,
+                "artifact_type": artifact["artifact_type"],
+                "label": artifact["label"],
+                "layer_name": artifact.get("layer_name"),
+                "blob_path": artifact["blob_path"],
+                "local_path": artifact.get("local_path"),
+                "content_type": artifact["content_type"],
+                "size_bytes": artifact.get("size_bytes"),
+                "bounds": artifact.get("bounds"),
+                "metadata": artifact.get("metadata", {}),
+                "is_download": artifact.get("is_download", True),
+                "display_order": artifact.get("display_order", 0),
+                "created_at": _utcnow(),
+            }
+        )
+
+    def _add_modal_events(self, job_id: str, events: List[Dict[str, Any]]) -> None:
+        existing = {
+            (event["stage"], event["message"])
+            for event in self.repository.list_events(job_id)
+        }
+        for event in events:
+            stage = str(event.get("stage", "modal"))
+            message = str(event.get("message", "")).strip()
+            if not message or (stage, message) in existing:
+                continue
+            self.repository.add_event(job_id, stage, message)
+            existing.add((stage, message))
+
+    def _sync_modal_progress(
+        self,
+        job_id: str,
+        *,
+        last_signature: tuple[str, str] | None,
+    ) -> tuple[str, str] | None:
+        progress_blob = self._artifact_blob_path(job_id, "modal", "progress.json")
+        if not self.storage.exists(progress_blob):
+            return last_signature
+
+        progress_path = self.settings.work_root / job_id / "modal" / "progress.json"
+        self.storage.download_file(progress_blob, progress_path)
+        progress = load_json_file(progress_path)
+        stage = str(progress.get("stage") or "")
+        message = str(progress.get("message") or "").strip()
+        if stage in STAGE_PROGRESS:
+            self.repository.update_job(
+                job_id,
+                status=JobStatus.running.value,
+                stage=stage,
+                progress=int(progress.get("progress") or STAGE_PROGRESS[stage]),
+            )
+        signature = (stage, message)
+        if message and signature != last_signature:
+            self.repository.add_event(job_id, stage or "modal", message)
+            return signature
+        return last_signature
+
+    def _process_job_modal(self, job_id: str) -> None:
+        job = self.repository.get_job(job_id)
+        if job is None:
+            raise KeyError(job_id)
+        if self.settings.storage_mode != "azure":
+            raise RuntimeError("Modal processing requires Azure Blob storage mode.")
+
+        self._set_stage(
+            job_id,
+            JobStage.validating.value,
+            "Submitting the Roadlytics job to Modal GPU inference.",
+            status=JobStatus.running.value,
+            extra_updates={"started_at": _utcnow()},
+        )
+        payload = {
+            "job_id": job_id,
+            "input_blob_path": job["input_blob_path"],
+            "output_prefix": f"jobs/{job_id}",
+            "project_name": job["project_name"],
+            "description": job.get("description", ""),
+            "segmenter": job["segmenter"],
+            "classifier": job["classifier"],
+        }
+
+        runner = ModalPipelineRunner(self.settings)
+        function_call = runner.spawn(payload)
+        call_id = function_call.object_id
+        if call_id:
+            self.repository.add_event(
+                job_id,
+                JobStage.validating.value,
+                f"Modal function call started: {call_id}",
+            )
+
+        last_signature: tuple[str, str] | None = None
+        while True:
+            try:
+                result = function_call.get(timeout=self.settings.modal_progress_poll_seconds)
+                break
+            except TimeoutError:
+                last_signature = self._sync_modal_progress(
+                    job_id,
+                    last_signature=last_signature,
+                )
+
+        if result.get("status") != "completed":
+            raise RuntimeError(result.get("error_message") or "Modal processing did not complete.")
+
+        self._add_modal_events(job_id, result.get("events", []))
+        self.repository.update_job(
+            job_id,
+            input_local_path=None,
+            bounds=result.get("bounds"),
+            raster_meta=result.get("raster_meta", {}),
+        )
+        self.repository.upsert_analytics(job_id, result.get("analytics_summary", {}))
+        self.repository.clear_artifacts(job_id)
+        for artifact in result.get("artifacts", []):
+            self._register_remote_artifact(job_id, artifact)
+
+        self._set_stage(
+            job_id,
+            JobStage.completed.value,
+            "Modal processing complete. Artifacts and map layers are ready.",
+            status=JobStatus.completed.value,
+            extra_updates={"completed_at": _utcnow(), "error_message": None},
+        )
+
     def process_job(self, job_id: str) -> None:
+        if self.settings.processor == "modal":
+            try:
+                self._process_job_modal(job_id)
+            except Exception as exc:
+                self.repository.update_job(
+                    job_id,
+                    status=JobStatus.failed.value,
+                    stage=JobStage.failed.value,
+                    progress=STAGE_PROGRESS[JobStage.failed.value],
+                    error_message=str(exc),
+                    completed_at=_utcnow(),
+                )
+                self.repository.add_event(
+                    job_id,
+                    JobStage.failed.value,
+                    f"Modal job failed: {exc}",
+                )
+                raise
+            return
+        if self.settings.processor != "local":
+            raise RuntimeError(
+                "ROADLYTICS_PROCESSOR must be either 'local' or 'modal'."
+            )
+
         job = self.repository.get_job(job_id)
         if job is None:
             raise KeyError(job_id)

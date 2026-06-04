@@ -32,6 +32,11 @@ class Settings:
     tile_cache_max_age: int
     blob_connection_string: str
     blob_container: str
+    processor: str
+    modal_app_name: str
+    modal_function_name: str
+    modal_environment_name: str
+    modal_progress_poll_seconds: int
     gemini_api_key: str
     assistant_model: str
     assistant_embedding_model: str
@@ -80,6 +85,14 @@ def get_settings() -> Settings:
         tile_cache_max_age=int(os.environ.get("ROADLYTICS_TILE_CACHE_MAX_AGE", "300")),
         blob_connection_string=os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "").strip(),
         blob_container=os.environ.get("AZURE_STORAGE_CONTAINER", "roadlytics"),
+        processor=os.environ.get("ROADLYTICS_PROCESSOR", "local").strip().lower(),
+        modal_app_name=os.environ.get("ROADLYTICS_MODAL_APP", "roadlytics-inference").strip(),
+        modal_function_name=os.environ.get("ROADLYTICS_MODAL_FUNCTION", "run_pipeline").strip(),
+        modal_environment_name=os.environ.get("ROADLYTICS_MODAL_ENVIRONMENT", "main").strip(),
+        modal_progress_poll_seconds=max(
+            1,
+            int(os.environ.get("ROADLYTICS_MODAL_PROGRESS_POLL_SECONDS", "10")),
+        ),
         gemini_api_key=os.environ.get("GEMINI_API_KEY", "").strip(),
         assistant_model=os.environ.get("ROADLYTICS_ASSISTANT_MODEL", "gemini-2.5-flash"),
         assistant_embedding_model=os.environ.get(

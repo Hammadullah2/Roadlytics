@@ -10,3 +10,4 @@ rio-tiler>=7.4
 Pillow>=10.4
 google-genai>=1.0
 chromadb>=0.5
+modal>=1.0

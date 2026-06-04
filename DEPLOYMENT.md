@@ -45,6 +45,17 @@ still uses local evidence retrieval with a simpler fallback answer.
 
 See [docs/assistant-rag.md](/C:/Users/hammad/Roadlytics/docs/assistant-rag.md) for the manual setup steps.
 
+## Modal inference
+
+The backend now supports two processor modes:
+
+- `ROADLYTICS_PROCESSOR=local`: run the original in-container worker path
+- `ROADLYTICS_PROCESSOR=modal`: submit inference/geospatial jobs to Modal GPUs
+
+Modal mode still uses Azure Blob for uploads and artifacts. See
+[modal_app/README.md](/C:/Users/hammad/Roadlytics/modal_app/README.md) and
+[docs/handoff/modal-migration.md](/C:/Users/hammad/Roadlytics/docs/handoff/modal-migration.md).
+
 ## PakOSM data
 
 Place the Pakistan OSM roads shapefile set in `data/osm_roads/` using the filename stem:
