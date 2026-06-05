@@ -8,6 +8,7 @@ from typing import Dict, Optional
 
 import numpy as np
 from PIL import Image
+from rio_tiler.errors import TileOutsideBounds
 from rio_tiler.io import Reader
 
 from ..database import Repository
@@ -24,6 +25,10 @@ def _png_bytes(rgba: np.ndarray) -> bytes:
     buffer = BytesIO()
     Image.fromarray(rgba, mode="RGBA").save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+def _transparent_tile(size: int = 256) -> bytes:
+    return _png_bytes(np.zeros((size, size, 4), dtype=np.uint8))
 
 
 def _to_rgba_tile(layer: str, data: np.ndarray, mask: Optional[np.ndarray]) -> np.ndarray:
@@ -122,7 +127,9 @@ class TileService:
             raise KeyError(layer)
         source = self._source_for_artifact(artifact)
         with Reader(source) as reader:
-            image = reader.tile(x, y, z)
+            try:
+                image = reader.tile(x, y, z)
+            except TileOutsideBounds:
+                return _transparent_tile()
         rgba = _to_rgba_tile(layer, image.data, image.mask)
         return _png_bytes(rgba)
-

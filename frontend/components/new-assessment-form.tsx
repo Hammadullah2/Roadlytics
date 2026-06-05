@@ -15,6 +15,7 @@ export function NewAssessmentForm({ onCreated }: Props) {
   const [classifier, setClassifier] = useState<"KMeans" | "EfficientNet">("KMeans");
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -30,6 +31,7 @@ export function NewAssessmentForm({ onCreated }: Props) {
     }
 
     setIsSubmitting(true);
+    setStatusMessage("Starting assessment...");
     setError(null);
     setSuccess(null);
     try {
@@ -39,13 +41,16 @@ export function NewAssessmentForm({ onCreated }: Props) {
         file,
         segmenter,
         classifier,
+        onStatus: setStatusMessage,
       });
+      setStatusMessage(null);
       setSuccess("Assessment queued successfully.");
       onCreated?.(job.id);
       setProjectName("");
       setDescription("");
       setFile(null);
     } catch (caughtError) {
+      setStatusMessage(null);
       setError(
         caughtError instanceof Error
           ? caughtError.message
@@ -131,10 +136,11 @@ export function NewAssessmentForm({ onCreated }: Props) {
 
       {error ? <div className="error-text">{error}</div> : null}
       {success ? <div className="success-text">{success}</div> : null}
+      {statusMessage ? <div className="footer-note">{statusMessage}</div> : null}
 
       <div className="button-row">
         <button className="button primary" type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Starting Assessment..." : "Create Assessment"}
+          {isSubmitting ? (statusMessage ?? "Starting Assessment...") : "Create Assessment"}
         </button>
       </div>
     </form>

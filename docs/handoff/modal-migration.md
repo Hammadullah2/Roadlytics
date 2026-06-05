@@ -1,6 +1,6 @@
 # Modal Migration Context
 
-Roadlytics is being migrated so inference and geospatial processing can run on Modal GPUs while the FastAPI/frontend control plane stays mostly unchanged.
+Roadlytics has been migrated so inference and geospatial processing can run on Modal GPUs while the FastAPI/frontend control plane stays mostly unchanged.
 
 ## Chosen Split
 
@@ -26,6 +26,8 @@ ROADLYTICS_PROCESSOR=local
 
 for the original in-container worker.
 
+The current Azure VM test setup uses `ROADLYTICS_PROCESSOR=modal`.
+
 ## Modal Runtime Pieces
 
 The Modal app is in:
@@ -43,7 +45,19 @@ It defines:
 - GPU fallback: `["A10", "T4"]`
 - `max_containers=1` for cost safety
 
-## Manual Modal Setup
+Current deployed app:
+
+```text
+roadlytics-inference
+```
+
+Current GPU configuration:
+
+```python
+gpu=["A10", "T4"]
+```
+
+## Manual Modal Setup Reference
 
 ```powershell
 pip install modal
@@ -56,6 +70,8 @@ modal secret create roadlytics-azure `
   AZURE_STORAGE_CONTAINER="roadlytics"
 modal deploy modal_app/roadlytics_modal.py
 ```
+
+These setup steps have already been completed for the current test environment. Keep them here as recovery/reference commands only.
 
 Backend environment when enabling Modal:
 
@@ -83,19 +99,23 @@ MODAL_TOKEN_SECRET=
 10. Modal returns artifact metadata and analytics summary.
 11. Backend registers artifacts and marks the job completed.
 
-## First Smoke Test
+## Smoke Test Status
 
-Use a small clipped Sentinel-2 GeoTIFF.
+- `PakOSM + KMeans` smoke test completed successfully through Modal.
+- The completed smoke job registered 13 artifacts and map layers.
+- `DeepLabV3 + EfficientNet` remains the important full GPU validation path for `testing170.tif`.
 
-Recommended sequence:
+Recommended remaining sequence:
 
-1. `PakOSM + KMeans` to validate Blob, OSM, geospatial, packaging, and report flow cheaply.
-2. `DeepLabV3 + EfficientNet` to validate GPU, PyTorch, and weights.
+1. Use Antigravity to retry browser upload/job creation with `testing170.tif`.
+2. Validate `DeepLabV3 + EfficientNet` through Modal.
+3. Verify artifacts, map layers, analytics, reports, and RAG for the new job.
 
 ## Known Risks
 
 - Modal image build may be heavy because geospatial dependencies and PyTorch are large.
 - The first Modal cold start will be slow.
 - Very large GeoTIFFs can consume free credits quickly.
+- Browser upload can fail before job creation if the client-to-VM or client-to-Blob network path is slow or resets.
 - If `roadlytics-assets` is missing weights or OSM shapefiles, jobs will fail inside Modal.
 - If the backend does not have `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`, it cannot invoke the deployed Modal function.

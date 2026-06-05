@@ -91,11 +91,15 @@ export interface CreateJobPayload {
   file: File;
   segmenter: "DeepLabV3" | "PakOSM";
   classifier: "KMeans" | "EfficientNet";
+  onStatus?: (message: string) => void;
 }
 
 export async function createAssessment(payload: CreateJobPayload) {
+  payload.onStatus?.("Preparing upload...");
   const upload = await initUpload(payload.file);
+  payload.onStatus?.("Uploading GeoTIFF...");
   await uploadFile(payload.file, upload);
+  payload.onStatus?.("Creating processing job...");
   return requestJson<JobDetail>(`/api/jobs`, {
     method: "POST",
     body: JSON.stringify({

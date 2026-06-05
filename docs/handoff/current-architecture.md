@@ -17,6 +17,15 @@ FastAPI exposes upload, job, artifact, analytics, report, tile, file, and assist
 
 The backend can use local filesystem storage or Azure Blob depending on whether `AZURE_STORAGE_CONNECTION_STRING` is configured.
 
+Uploads have a separate transport switch:
+
+```bash
+ROADLYTICS_UPLOAD_TRANSPORT=auto
+ROADLYTICS_UPLOAD_TRANSPORT=backend_proxy
+```
+
+`auto` uses the storage backend's native upload session. With Azure Blob, that usually means browser-to-Blob SAS upload. `backend_proxy` keeps Azure Blob as durable storage but routes the browser upload through `POST /api/uploads/{upload_id}/file` on FastAPI first, so the browser talks to the same origin and the backend streams the file into Blob.
+
 ## Processing
 
 The original worker executes the full pipeline inside the backend container:
@@ -31,7 +40,7 @@ The original worker executes the full pipeline inside the backend container:
 8. Package artifacts and render HTML report.
 9. Register artifacts in SQLite.
 
-The Modal migration adds `ROADLYTICS_PROCESSOR=local|modal`. Local remains the default.
+The Modal migration adds `ROADLYTICS_PROCESSOR=local|modal`. Local remains the default for development, while the current Azure VM testing setup uses `modal`.
 
 ## Frontend
 
@@ -40,6 +49,18 @@ The frontend talks to the backend through `NEXT_PUBLIC_API_BASE_URL`. It uses Le
 ## Storage
 
 Azure Blob remains the intended durable object store for uploads, generated GeoTIFFs, reports, shapefile zips, CSVs, and GeoJSON outputs. Modal inference also reads from and writes to Azure Blob.
+
+The current VM testing default is `ROADLYTICS_UPLOAD_TRANSPORT=backend_proxy` because direct browser-to-Blob upload stalled during the `testing170.tif` test before job creation.
+
+## Tiles
+
+Raster layers are rendered through the backend tile route:
+
+```text
+GET /api/jobs/{job_id}/layers/{layer}/{z}/{x}/{y}.png
+```
+
+If Leaflet requests a tile outside a raster's bounds, the backend should return a transparent PNG with HTTP `200`, not a `500`. This prevents visible map errors when users pan around the edges of Sentinel/result rasters.
 
 ## Reports
 

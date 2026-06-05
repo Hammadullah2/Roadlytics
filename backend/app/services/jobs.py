@@ -34,7 +34,7 @@ from ..services.validation import (
     write_cog_or_copy,
 )
 from ..services.modal_runner import ModalPipelineRunner
-from ..storage.backends import LocalStorageBackend, StorageBackend
+from ..storage.backends import PreparedUpload, StorageBackend
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
@@ -194,12 +194,24 @@ class JobService:
     def initialize_upload(self, request: UploadInitRequest, base_url: str) -> Dict[str, Any]:
         upload_id = str(uuid.uuid4())
         blob_path = self.upload_blob_path(upload_id)
-        prepared = self.storage.create_upload_session(
-            upload_id=upload_id,
-            blob_path=blob_path,
-            filename=request.filename,
-            content_type=request.content_type,
-        )
+        if self.settings.upload_transport == "backend_proxy":
+            prepared = PreparedUpload(
+                upload_id=upload_id,
+                blob_path=blob_path,
+                filename=request.filename,
+                content_type=request.content_type,
+                kind="backend_proxy",
+                url=f"/api/uploads/{upload_id}/file",
+                method="POST",
+                headers={},
+            )
+        else:
+            prepared = self.storage.create_upload_session(
+                upload_id=upload_id,
+                blob_path=blob_path,
+                filename=request.filename,
+                content_type=request.content_type,
+            )
         return {
             "upload_id": prepared.upload_id,
             "blob_path": prepared.blob_path,
@@ -214,8 +226,6 @@ class JobService:
         }
 
     def accept_local_upload(self, upload_id: str, stream: BinaryIO, content_type: str) -> Dict[str, str]:
-        if not isinstance(self.storage, LocalStorageBackend):
-            raise RuntimeError("Local upload endpoint is unavailable in Azure storage mode.")
         blob_path = self.upload_blob_path(upload_id)
         self.storage.upload_stream(blob_path, stream, content_type)
         return {"upload_id": upload_id, "blob_path": blob_path}

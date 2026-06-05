@@ -27,6 +27,7 @@ class Settings:
     work_root: Path
     local_storage_root: Path
     upload_expiry_minutes: int
+    upload_transport: str
     download_expiry_minutes: int
     worker_concurrency: int
     tile_cache_max_age: int
@@ -78,6 +79,7 @@ def get_settings() -> Settings:
             os.environ.get("ROADLYTICS_LOCAL_STORAGE_ROOT", data_root / "storage")
         ),
         upload_expiry_minutes=int(os.environ.get("ROADLYTICS_UPLOAD_EXPIRY_MINUTES", "60")),
+        upload_transport=os.environ.get("ROADLYTICS_UPLOAD_TRANSPORT", "auto").strip().lower(),
         download_expiry_minutes=int(
             os.environ.get("ROADLYTICS_DOWNLOAD_EXPIRY_MINUTES", "180")
         ),
