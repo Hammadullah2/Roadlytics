@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+      args:
+        ROADLYTICS_INSTALL_PIPELINE: ${ROADLYTICS_INSTALL_PIPELINE:-false}
     container_name: roadlytics-backend
     ports:
       - "8000:8000"

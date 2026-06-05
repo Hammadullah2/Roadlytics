@@ -6,6 +6,7 @@ import sys
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional
 from urllib.parse import quote, urljoin
@@ -39,23 +40,6 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from road_pipeline.analytics.connectivity import run as connectivity_run
-from road_pipeline.classification.efficientnet import run as efficientnet_run
-from road_pipeline.classification.kmeans import run as kmeans_run
-from road_pipeline.config import (
-    CLASS_NAMES,
-    CLS_WEIGHTS,
-    DEVICE,
-    MIN_POLYGON_AREA_M2,
-    OSM_BUFFER_M,
-    SEG_THRESHOLD,
-    SEG_WEIGHTS,
-    SIMPLIFY_TOLERANCE_M,
-)
-from road_pipeline.postprocess.raster_to_vector import run as vectorize_run
-from road_pipeline.segmentation.deeplabv3 import run as deeplab_run
-from road_pipeline.segmentation.osm_to_mask import run as osm_run
-
 
 def _utcnow() -> str:
     return datetime.now(UTC).isoformat()
@@ -65,6 +49,44 @@ def _absolute_url(base_url: str, value: str) -> str:
     if value.startswith("http://") or value.startswith("https://"):
         return value
     return urljoin(base_url, value.lstrip("/"))
+
+
+@lru_cache(maxsize=1)
+def _load_local_pipeline() -> Dict[str, Any]:
+    """Load heavy geospatial/ML modules only when local processing is enabled."""
+    from road_pipeline.analytics.connectivity import run as connectivity_run
+    from road_pipeline.classification.efficientnet import run as efficientnet_run
+    from road_pipeline.classification.kmeans import run as kmeans_run
+    from road_pipeline.config import (
+        CLASS_NAMES,
+        CLS_WEIGHTS,
+        DEVICE,
+        MIN_POLYGON_AREA_M2,
+        OSM_BUFFER_M,
+        SEG_THRESHOLD,
+        SEG_WEIGHTS,
+        SIMPLIFY_TOLERANCE_M,
+    )
+    from road_pipeline.postprocess.raster_to_vector import run as vectorize_run
+    from road_pipeline.segmentation.deeplabv3 import run as deeplab_run
+    from road_pipeline.segmentation.osm_to_mask import run as osm_run
+
+    return {
+        "CLASS_NAMES": CLASS_NAMES,
+        "CLS_WEIGHTS": CLS_WEIGHTS,
+        "DEVICE": DEVICE,
+        "MIN_POLYGON_AREA_M2": MIN_POLYGON_AREA_M2,
+        "OSM_BUFFER_M": OSM_BUFFER_M,
+        "SEG_THRESHOLD": SEG_THRESHOLD,
+        "SEG_WEIGHTS": SEG_WEIGHTS,
+        "SIMPLIFY_TOLERANCE_M": SIMPLIFY_TOLERANCE_M,
+        "connectivity_run": connectivity_run,
+        "efficientnet_run": efficientnet_run,
+        "kmeans_run": kmeans_run,
+        "vectorize_run": vectorize_run,
+        "deeplab_run": deeplab_run,
+        "osm_run": osm_run,
+    }
 
 
 @dataclass(frozen=True)
@@ -571,6 +593,7 @@ class JobProcessor:
             raise RuntimeError(
                 "ROADLYTICS_PROCESSOR must be either 'local' or 'modal'."
             )
+        pipeline = _load_local_pipeline()
 
         job = self.repository.get_job(job_id)
         if job is None:
@@ -625,18 +648,18 @@ class JobProcessor:
                 "Generating the road segmentation mask.",
             )
             if job["segmenter"] == "deeplab":
-                seg_mask_path = deeplab_run(
+                seg_mask_path = pipeline["deeplab_run"](
                     input_tif=input_path,
                     output_dir=segmentation_dir,
-                    threshold=SEG_THRESHOLD,
-                    weights_path=SEG_WEIGHTS,
-                    device=DEVICE,
+                    threshold=pipeline["SEG_THRESHOLD"],
+                    weights_path=pipeline["SEG_WEIGHTS"],
+                    device=pipeline["DEVICE"],
                 )
             else:
-                seg_mask_path = osm_run(
+                seg_mask_path = pipeline["osm_run"](
                     input_tif=input_path,
                     output_dir=segmentation_dir,
-                    buffer_m=OSM_BUFFER_M,
+                    buffer_m=pipeline["OSM_BUFFER_M"],
                 )
 
             self._set_stage(
@@ -646,23 +669,26 @@ class JobProcessor:
             )
             stem = f"{input_path.stem}_{job['segmenter']}_{job['classifier']}"
             if job["classifier"] == "efficientnet":
-                cls_paths = efficientnet_run(
+                cls_paths = pipeline["efficientnet_run"](
                     stack_path=input_path,
                     mask_path=seg_mask_path,
                     stem=stem,
                     output_dir=classification_dir,
-                    weights_path=CLS_WEIGHTS,
-                    device=DEVICE,
+                    weights_path=pipeline["CLS_WEIGHTS"],
+                    device=pipeline["DEVICE"],
                 )
             else:
-                cls_paths = kmeans_run(
+                cls_paths = pipeline["kmeans_run"](
                     stack_path=input_path,
                     mask_path=seg_mask_path,
                     stem=stem,
                     output_dir=classification_dir,
                 )
 
-            class_tifs = {name: Path(cls_paths[index]) for index, name in enumerate(CLASS_NAMES)}
+            class_tifs = {
+                name: Path(cls_paths[index])
+                for index, name in enumerate(pipeline["CLASS_NAMES"])
+            }
             combined_tif = Path(cls_paths[3])
 
             self._set_stage(
@@ -670,7 +696,7 @@ class JobProcessor:
                 JobStage.connectivity.value,
                 "Running raster-first connectivity analytics.",
             )
-            connectivity = connectivity_run(
+            connectivity = pipeline["connectivity_run"](
                 seg_mask_path=seg_mask_path,
                 classified_tif_path=combined_tif,
                 output_dir=connectivity_dir,
@@ -681,11 +707,11 @@ class JobProcessor:
                 JobStage.packaging.value,
                 "Packaging artifacts, reports, and map-ready layers.",
             )
-            shapefiles = vectorize_run(
+            shapefiles = pipeline["vectorize_run"](
                 class_tifs=class_tifs,
                 output_dir=shapefile_dir,
-                min_area_m2=MIN_POLYGON_AREA_M2,
-                simplify_tolerance_m=SIMPLIFY_TOLERANCE_M,
+                min_area_m2=pipeline["MIN_POLYGON_AREA_M2"],
+                simplify_tolerance_m=pipeline["SIMPLIFY_TOLERANCE_M"],
             )
             shapefile_zip = package_shapefiles(
                 shapefiles,
