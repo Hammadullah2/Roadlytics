@@ -56,7 +56,7 @@ The backend image must be rebuilt because the assistant adds Python dependencies
 
 ```bash
 cd /opt/roadlytics
-git pull origin version2
+git pull origin codex/modal-inference-migration
 docker compose --env-file deploy/azure/.env.vm -f docker-compose.yml -f deploy/azure/docker-compose.prod.yml build backend frontend
 docker compose --env-file deploy/azure/.env.vm -f docker-compose.yml -f deploy/azure/docker-compose.prod.yml up -d
 ```

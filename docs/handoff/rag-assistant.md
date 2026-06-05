@@ -21,6 +21,7 @@ The assistant can:
 - Draft report summaries and limitations.
 - Compare jobs when a comparison job id is provided.
 - Answer project-library questions from recent job metadata.
+- Help write report paragraphs and presentation talking points while staying grounded in job evidence.
 
 ## Retrieval Sources
 
@@ -43,6 +44,8 @@ The assistant retrieves from:
 - Gemini generation is used if `GEMINI_API_KEY` is configured.
 - Without Gemini, the assistant returns local extractive fallback answers from retrieved evidence.
 
+The assistant is intentionally scoped to Roadlytics evidence. It should answer from method notes, layer glossary, job metadata, events, artifact manifests, analytics snapshots, and generated report text. If evidence is missing, it should say what is missing rather than inventing results.
+
 ## Guardrails
 
 The assistant should not claim:
@@ -54,6 +57,19 @@ The assistant should not claim:
 - Emergency routing reliability.
 
 It should phrase outputs as being based on uploaded imagery and Roadlytics model results, with field inspection required before operational decisions.
+
+## Testing
+
+Use `docs/handoff/rag-testing-suite.md` for manual UI/API testing. That suite includes:
+
+- normal project understanding prompts
+- map-layer prompts
+- connectivity analytics prompts
+- final-report writing prompts
+- upload/failure debugging prompts
+- malicious prompts for guardrail checks
+
+Key malicious prompts try to force exact repair costs, legal certification, guaranteed road safety, emergency routing, fabricated accuracy, secret disclosure, or report tampering. Passing behavior means the assistant refuses or corrects these requests and stays grounded.
 
 ## Key Environment Variables
 

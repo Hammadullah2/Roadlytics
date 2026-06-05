@@ -258,13 +258,13 @@ class AssistantService:
                 provider = "gemini"
                 model = self.settings.assistant_model
             else:
-                answer = self._fallback_answer(request, retrieved)
+                answer = self._fallback_answer(request, chunks)
                 confidence = "low"
         except Exception as exc:
             answer = (
-                "I could not reach the configured LLM, so I am answering from the available "
-                f"Roadlytics evidence instead. Configuration detail: {exc}\n\n"
-                + self._fallback_answer(request, retrieved)
+                "Gemini generation is currently unavailable, so I am answering from the available "
+                "Roadlytics evidence instead.\n\n"
+                + self._fallback_answer(request, chunks)
             )
             confidence = "low"
 
@@ -460,12 +460,74 @@ Return a helpful answer with a short caveat when making analytical claims.
     def _fallback_answer(request: AssistantChatRequest, chunks: Sequence[EvidenceChunk]) -> str:
         if not chunks:
             return "I do not have enough Roadlytics evidence to answer that yet."
+
+        def first_chunk(chunk_type: str) -> EvidenceChunk | None:
+            return next(
+                (
+                    chunk
+                    for chunk in chunks
+                    if str(chunk.metadata.get("type", "")).lower() == chunk_type
+                ),
+                None,
+            )
+
+        def parse_json(chunk: EvidenceChunk | None) -> Any:
+            if chunk is None:
+                return None
+            try:
+                return json.loads(chunk.text)
+            except json.JSONDecodeError:
+                return None
+
+        job = parse_json(first_chunk("job_detail")) or {}
+        analytics = parse_json(first_chunk("analytics")) or {}
+        artifacts = parse_json(first_chunk("artifacts")) or []
+        events = parse_json(first_chunk("events")) or []
+
+        if job:
+            artifact_labels = [
+                str(artifact.get("label") or artifact.get("type"))
+                for artifact in artifacts[:8]
+                if isinstance(artifact, dict)
+            ]
+            final_stage = events[-1]["message"] if events and isinstance(events[-1], dict) else None
+            lines = [
+                f"Assessment `{job.get('project_name', 'Roadlytics job')}` is `{job.get('status', 'unknown')}` at `{job.get('progress', 0)}%` progress.",
+                f"Selected models: `{job.get('segmenter', 'unknown')}` for road segmentation and `{job.get('classifier', 'unknown')}` for road-condition classification.",
+            ]
+            raster_meta = job.get("raster_meta") or {}
+            if raster_meta:
+                lines.append(
+                    "Input raster metadata: "
+                    f"{raster_meta.get('width')} x {raster_meta.get('height')} pixels, "
+                    f"{raster_meta.get('band_count')} bands, `{raster_meta.get('crs')}` CRS."
+                )
+            if artifact_labels:
+                lines.append(
+                    "Key outputs include: " + ", ".join(artifact_labels) + "."
+                )
+            if analytics:
+                metrics = []
+                for key in (
+                    "total_road_pixels",
+                    "total_components",
+                    "isolated_components",
+                    "largest_component_length_km",
+                    "critical_junctions",
+                ):
+                    if key in analytics:
+                        metrics.append(f"{key.replace('_', ' ')} = {analytics[key]}")
+                if metrics:
+                    lines.append("Connectivity metrics: " + "; ".join(metrics) + ".")
+            if final_stage:
+                lines.append(f"Latest event: {final_stage}")
+            lines.append(
+                "Use these outputs as model-derived decision support for prioritizing map review and field inspection."
+            )
+            return "\n\n".join(lines)
+
         evidence_lines = "\n".join(f"- {chunk.label}: {chunk.text[:420]}" for chunk in chunks[:4])
-        return (
-            "Here is what I can tell from the available Roadlytics evidence:\n"
-            f"{evidence_lines}\n\n"
-            "For stronger natural-language reasoning, configure GEMINI_API_KEY on the backend."
-        )
+        return "Here is what I can tell from the available Roadlytics evidence:\n" + evidence_lines
 
     @staticmethod
     def _append_required_caveat(answer: str) -> str:
