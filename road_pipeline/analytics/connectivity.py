@@ -17,6 +17,7 @@ from scipy import ndimage
 
 from ..config import (
     CLASS_VALUES,
+    CONNECTIVITY_BRANDES_NODE_LIMIT,
     CONNECTIVITY_COSTS,
     CONNECTIVITY_CRITICAL_PERCENTILE,
     CONNECTIVITY_ISOLATION_THRESHOLD,
@@ -98,6 +99,54 @@ def _weighted_brandes(
     if centrality.max() > 0:
         centrality /= centrality.max()
     return centrality.astype(np.float32)
+
+
+def _local_junction_criticality(
+    road_mask: np.ndarray,
+    cost_map: np.ndarray,
+    labeled: np.ndarray,
+    component_sizes: np.ndarray,
+    connectivity: int,
+) -> np.ndarray:
+    """
+    Fast criticality proxy for large raster graphs.
+
+    Exact betweenness is too expensive for multi-million-pixel road masks. This
+    score prioritizes junction-like pixels in large components and higher-cost
+    road-condition areas, producing a bounded map suitable for MVP analysis.
+    """
+    if connectivity == 8:
+        kernel = np.ones((3, 3), dtype=np.uint8)
+        kernel[1, 1] = 0
+        max_degree = 8.0
+    else:
+        kernel = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=np.uint8)
+        max_degree = 4.0
+
+    degree = ndimage.convolve(road_mask.astype(np.uint8), kernel, mode="constant", cval=0)
+    degree_score = np.clip((degree.astype(np.float32) - 1.0) / max(max_degree - 1.0, 1.0), 0.0, 1.0)
+    junction_bonus = np.where(degree >= 3, 1.0, 0.35).astype(np.float32)
+
+    safe_component_sizes = np.zeros_like(component_sizes, dtype=np.float32)
+    if len(component_sizes) > 1:
+        safe_component_sizes[1:] = component_sizes[1:].astype(np.float32)
+    component_size_map = safe_component_sizes[labeled]
+    max_component = float(component_size_map.max())
+    component_score = (
+        np.log1p(component_size_map) / math.log1p(max_component)
+        if max_component > 0
+        else np.zeros_like(component_size_map, dtype=np.float32)
+    )
+
+    max_cost = float(cost_map[road_mask > 0].max()) if np.any(road_mask > 0) else 0.0
+    cost_score = (cost_map / max_cost) if max_cost > 0 else np.zeros_like(cost_map, dtype=np.float32)
+
+    criticality = degree_score * junction_bonus * component_score.astype(np.float32) * np.maximum(cost_score, 0.25)
+    criticality[road_mask == 0] = 0.0
+    max_score = float(criticality.max())
+    if max_score > 0:
+        criticality = criticality / max_score
+    return criticality.astype(np.float32)
 
 
 def _write_components_csv(path: Path, rows: Sequence[Dict[str, object]]) -> None:
@@ -203,31 +252,43 @@ def run(
     if len(coords) == 0:
         raise ValueError("Connectivity analysis requires at least one road pixel.")
 
-    coord_to_index = {tuple(coord): idx for idx, coord in enumerate(coords.tolist())}
-    component_per_index = np.zeros(len(coords), dtype=np.uint16)
-    neighbors: List[List[Tuple[int, float]]] = [[] for _ in range(len(coords))]
-    for idx, (row, col) in enumerate(coords):
-        component_per_index[idx] = labeled[row, col]
-        for dy, dx in _neighbor_deltas(connectivity):
-            ny, nx = row + dy, col + dx
-            neighbor_index = coord_to_index.get((ny, nx))
-            if neighbor_index is None:
-                continue
-            travel_cost = float(cost_map[ny, nx] or 1.0)
-            if dy != 0 and dx != 0:
-                travel_cost *= math.sqrt(2)
-            neighbors[idx].append((neighbor_index, travel_cost))
-
-    if len(coords) <= max_sources:
-        source_indices = list(range(len(coords)))
+    component_sizes_by_id = np.bincount(labeled.ravel(), minlength=n_components + 1)
+    component_per_index = labeled[coords[:, 0], coords[:, 1]].astype(np.uint32)
+    if len(coords) > CONNECTIVITY_BRANDES_NODE_LIMIT:
+        criticality_method = "local_junction_heuristic"
+        betweenness_map = _local_junction_criticality(
+            road_mask,
+            cost_map,
+            labeled,
+            component_sizes_by_id,
+            connectivity,
+        )
+        betweenness = betweenness_map[coords[:, 0], coords[:, 1]].astype(np.float32)
     else:
-        sample_positions = np.linspace(0, len(coords) - 1, num=max_sources, dtype=int)
-        source_indices = sample_positions.tolist()
+        criticality_method = "sampled_brandes"
+        coord_to_index = {tuple(coord): idx for idx, coord in enumerate(coords.tolist())}
+        neighbors: List[List[Tuple[int, float]]] = [[] for _ in range(len(coords))]
+        for idx, (row, col) in enumerate(coords):
+            for dy, dx in _neighbor_deltas(connectivity):
+                ny, nx = row + dy, col + dx
+                neighbor_index = coord_to_index.get((ny, nx))
+                if neighbor_index is None:
+                    continue
+                travel_cost = float(cost_map[ny, nx] or 1.0)
+                if dy != 0 and dx != 0:
+                    travel_cost *= math.sqrt(2)
+                neighbors[idx].append((neighbor_index, travel_cost))
 
-    betweenness = _weighted_brandes(neighbors, source_indices)
-    betweenness_map = np.zeros_like(cost_map, dtype=np.float32)
-    for idx, (row, col) in enumerate(coords):
-        betweenness_map[row, col] = betweenness[idx]
+        if len(coords) <= max_sources:
+            source_indices = list(range(len(coords)))
+        else:
+            sample_positions = np.linspace(0, len(coords) - 1, num=max_sources, dtype=int)
+            source_indices = sample_positions.tolist()
+
+        betweenness = _weighted_brandes(neighbors, source_indices)
+        betweenness_map = np.zeros_like(cost_map, dtype=np.float32)
+        for idx, (row, col) in enumerate(coords):
+            betweenness_map[row, col] = betweenness[idx]
 
     component_rows: List[Dict[str, object]] = []
     component_sizes = []
@@ -307,6 +368,9 @@ def run(
         "critical_junctions": int(len(critical_indices)),
         "critical_junction_count": int(len(critical_indices)),
         "critical_threshold": float(round(threshold, 6)),
+        "criticality_method": criticality_method,
+        "criticality_node_count": int(len(coords)),
+        "brandes_node_limit": int(CONNECTIVITY_BRANDES_NODE_LIMIT),
         "pixel_size_m": pixel_size_m,
     }
     summary_json_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
