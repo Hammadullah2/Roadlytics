@@ -13,3 +13,7 @@ node_modules/
 dist/
 build/
 tmp_e2e/
+model_weights/
+*.pth
+*.pt
+*.ckpt
