@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import List, Optional
 
 from ..services.jobs import JobProcessor
+
+logger = logging.getLogger(__name__)
 
 
 class WorkerService:
@@ -40,6 +43,7 @@ class WorkerService:
                 break
             try:
                 await asyncio.to_thread(self.processor.process_job, job_id)
+            except Exception:
+                logger.exception("Background worker %s failed job %s", worker_index, job_id)
             finally:
                 self.queue.task_done()
-
