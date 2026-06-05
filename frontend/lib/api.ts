@@ -60,7 +60,42 @@ export async function initUpload(file: File) {
   });
 }
 
-async function uploadFile(file: File, upload: UploadInitResponse) {
+function uploadWithProgress(
+  file: File,
+  upload: UploadInitResponse,
+  onStatus?: (message: string) => void,
+) {
+  return new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(upload.transport.method, upload.transport.url);
+    Object.entries(upload.transport.headers ?? {}).forEach(([key, value]) => {
+      xhr.setRequestHeader(key, value);
+    });
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        return;
+      }
+      const percent = Math.max(1, Math.min(99, Math.round((event.loaded / event.total) * 100)));
+      onStatus?.(`Uploading GeoTIFF... ${percent}%`);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      reject(new Error(xhr.responseText || `Upload failed with ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error("Upload failed before reaching the server."));
+    xhr.onabort = () => reject(new Error("Upload was cancelled."));
+    xhr.send(file);
+  });
+}
+
+async function uploadFile(
+  file: File,
+  upload: UploadInitResponse,
+  onStatus?: (message: string) => void,
+) {
   if (upload.transport.kind === "azure_sas") {
     const response = await fetch(upload.transport.url, {
       method: upload.transport.method,
@@ -70,6 +105,11 @@ async function uploadFile(file: File, upload: UploadInitResponse) {
     if (!response.ok) {
       throw new Error("Azure Blob upload failed.");
     }
+    return;
+  }
+
+  if (upload.transport.method.toUpperCase() === "PUT") {
+    await uploadWithProgress(file, upload, onStatus);
     return;
   }
 
@@ -98,7 +138,7 @@ export async function createAssessment(payload: CreateJobPayload) {
   payload.onStatus?.("Preparing upload...");
   const upload = await initUpload(payload.file);
   payload.onStatus?.("Uploading GeoTIFF...");
-  await uploadFile(payload.file, upload);
+  await uploadFile(payload.file, upload, payload.onStatus);
   payload.onStatus?.("Creating processing job...");
   return requestJson<JobDetail>(`/api/jobs`, {
     method: "POST",

@@ -94,8 +94,8 @@ class LocalStorageBackend:
             content_type=content_type,
             kind="backend_proxy",
             url=f"/api/uploads/{upload_id}/file",
-            method="POST",
-            headers={},
+            method="PUT",
+            headers={"Content-Type": content_type},
         )
 
     def upload_stream(self, blob_path: str, stream: BinaryIO, content_type: str) -> None:

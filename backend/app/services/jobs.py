@@ -202,8 +202,8 @@ class JobService:
                 content_type=request.content_type,
                 kind="backend_proxy",
                 url=f"/api/uploads/{upload_id}/file",
-                method="POST",
-                headers={},
+                method="PUT",
+                headers={"Content-Type": request.content_type or "image/tiff"},
             )
         else:
             prepared = self.storage.create_upload_session(
@@ -228,6 +228,11 @@ class JobService:
     def accept_local_upload(self, upload_id: str, stream: BinaryIO, content_type: str) -> Dict[str, str]:
         blob_path = self.upload_blob_path(upload_id)
         self.storage.upload_stream(blob_path, stream, content_type)
+        return {"upload_id": upload_id, "blob_path": blob_path}
+
+    def accept_local_upload_file(self, upload_id: str, local_path: Path, content_type: str) -> Dict[str, str]:
+        blob_path = self.upload_blob_path(upload_id)
+        self.storage.upload_file(local_path, blob_path, content_type)
         return {"upload_id": upload_id, "blob_path": blob_path}
 
     def create_job(self, payload: JobCreateRequest) -> Dict[str, Any]:
