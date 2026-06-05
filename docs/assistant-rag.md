@@ -1,9 +1,10 @@
 # Roadlytics Assistant RAG Setup
 
-Roadlytics includes an optional Gemini-powered assistant for explaining jobs, reports, map layers,
-failures, and project-library context. The feature works in two modes:
+Roadlytics includes an optional LLM-powered assistant for explaining jobs, reports, map layers,
+failures, and project-library context. The feature works in these modes:
 
 - With `GEMINI_API_KEY`: grounded Gemini responses using Roadlytics evidence.
+- With `ROADLYTICS_ASSISTANT_PROVIDER=openai_compatible`: grounded responses from Groq, OpenRouter, or another OpenAI-compatible `/chat/completions` API.
 - Without `GEMINI_API_KEY`: local extractive fallback so the UI still responds from indexed evidence.
 
 ## What The Assistant Can See
@@ -22,14 +23,17 @@ for operational decisions.
 
 ## Manual Configuration
 
-Create a Gemini API key in Google AI Studio, then add it to the backend environment.
+Choose one provider, then add its settings to the backend environment.
+
+### Option A: Groq Free API
 
 For local Docker Compose, add this to your local `.env` file:
 
 ```bash
-GEMINI_API_KEY=your_google_ai_studio_key_here
-ROADLYTICS_ASSISTANT_MODEL=gemini-2.5-flash
-ROADLYTICS_ASSISTANT_EMBEDDING_MODEL=gemini-embedding-001
+ROADLYTICS_ASSISTANT_PROVIDER=openai_compatible
+ROADLYTICS_ASSISTANT_API_KEY=your_groq_key_here
+ROADLYTICS_ASSISTANT_BASE_URL=https://api.groq.com/openai/v1
+ROADLYTICS_ASSISTANT_MODEL=llama-3.3-70b-versatile
 ROADLYTICS_ASSISTANT_CHROMA_PATH=/app/backend/data/chroma
 ROADLYTICS_ASSISTANT_MAX_CONTEXT_CHARS=18000
 ```
@@ -43,6 +47,31 @@ For the Azure VM, edit:
 and add the same values:
 
 ```bash
+ROADLYTICS_ASSISTANT_PROVIDER=openai_compatible
+ROADLYTICS_ASSISTANT_API_KEY=your_groq_key_here
+ROADLYTICS_ASSISTANT_BASE_URL=https://api.groq.com/openai/v1
+ROADLYTICS_ASSISTANT_MODEL=llama-3.3-70b-versatile
+ROADLYTICS_ASSISTANT_CHROMA_PATH=/app/backend/data/chroma
+ROADLYTICS_ASSISTANT_MAX_CONTEXT_CHARS=18000
+```
+
+### Option B: OpenRouter Free Models
+
+```bash
+ROADLYTICS_ASSISTANT_PROVIDER=openai_compatible
+ROADLYTICS_ASSISTANT_API_KEY=your_openrouter_key_here
+ROADLYTICS_ASSISTANT_BASE_URL=https://openrouter.ai/api/v1
+ROADLYTICS_ASSISTANT_MODEL=meta-llama/llama-3.2-3b-instruct:free
+ROADLYTICS_ASSISTANT_CHROMA_PATH=/app/backend/data/chroma
+ROADLYTICS_ASSISTANT_MAX_CONTEXT_CHARS=18000
+```
+
+### Option C: Gemini
+
+Gemini may fail from some cloud regions with `User location is not supported for the API use`.
+
+```bash
+ROADLYTICS_ASSISTANT_PROVIDER=gemini
 GEMINI_API_KEY=your_google_ai_studio_key_here
 ROADLYTICS_ASSISTANT_MODEL=gemini-2.5-flash
 ROADLYTICS_ASSISTANT_EMBEDDING_MODEL=gemini-embedding-001
@@ -80,4 +109,4 @@ The frontend currently mounts the assistant drawer on Dashboard, Map Analysis, a
 
 - ChromaDB persists under `backend/data/chroma` through the existing Docker volume mount.
 - Roadlytics uses local hash embeddings for Chroma retrieval to avoid extra model downloads on the VM.
-- Gemini is used only for natural-language generation, not for changing job artifacts or analytics.
+- The LLM is used only for natural-language generation, not for changing job artifacts or analytics.

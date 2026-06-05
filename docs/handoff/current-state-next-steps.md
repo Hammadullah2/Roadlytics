@@ -44,11 +44,15 @@ NEXT_PUBLIC_API_BASE_URL=http://52.139.179.111
 Optional RAG generation:
 
 ```bash
-GEMINI_API_KEY=
-ROADLYTICS_ASSISTANT_MODEL=gemini-2.5-flash
+ROADLYTICS_ASSISTANT_PROVIDER=openai_compatible
+ROADLYTICS_ASSISTANT_API_KEY=
+ROADLYTICS_ASSISTANT_BASE_URL=https://api.groq.com/openai/v1
+ROADLYTICS_ASSISTANT_MODEL=llama-3.3-70b-versatile
 ROADLYTICS_ASSISTANT_CHROMA_PATH=/app/backend/data/chroma
 ROADLYTICS_ASSISTANT_MAX_CONTEXT_CHARS=18000
 ```
+
+Gemini is still supported with `ROADLYTICS_ASSISTANT_PROVIDER=gemini` and `GEMINI_API_KEY`, but the Azure VM test hit Google's `User location is not supported for the API use` response.
 
 ## Current Live Results
 

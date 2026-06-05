@@ -39,6 +39,9 @@ class Settings:
     modal_environment_name: str
     modal_progress_poll_seconds: int
     gemini_api_key: str
+    assistant_provider: str
+    assistant_api_key: str
+    assistant_base_url: str
     assistant_model: str
     assistant_embedding_model: str
     assistant_chroma_path: Path
@@ -96,6 +99,9 @@ def get_settings() -> Settings:
             int(os.environ.get("ROADLYTICS_MODAL_PROGRESS_POLL_SECONDS", "10")),
         ),
         gemini_api_key=os.environ.get("GEMINI_API_KEY", "").strip(),
+        assistant_provider=os.environ.get("ROADLYTICS_ASSISTANT_PROVIDER", "gemini").strip().lower(),
+        assistant_api_key=os.environ.get("ROADLYTICS_ASSISTANT_API_KEY", "").strip(),
+        assistant_base_url=os.environ.get("ROADLYTICS_ASSISTANT_BASE_URL", "").strip().rstrip("/"),
         assistant_model=os.environ.get("ROADLYTICS_ASSISTANT_MODEL", "gemini-2.5-flash"),
         assistant_embedding_model=os.environ.get(
             "ROADLYTICS_ASSISTANT_EMBEDDING_MODEL",

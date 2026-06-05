@@ -41,8 +41,9 @@ The assistant retrieves from:
 
 - ChromaDB is used as the vector store.
 - The app uses a deterministic local hash embedding function to avoid downloading embedding models on the VM.
-- Gemini generation is used if `GEMINI_API_KEY` is configured.
-- Without Gemini, the assistant returns local extractive fallback answers from retrieved evidence.
+- Gemini generation is used if `ROADLYTICS_ASSISTANT_PROVIDER=gemini` and `GEMINI_API_KEY` are configured.
+- Groq, OpenRouter, or another OpenAI-compatible chat API can be used with `ROADLYTICS_ASSISTANT_PROVIDER=openai_compatible`.
+- Without a working provider, the assistant returns local extractive fallback answers from retrieved evidence.
 
 The assistant is intentionally scoped to Roadlytics evidence. It should answer from method notes, layer glossary, job metadata, events, artifact manifests, analytics snapshots, and generated report text. If evidence is missing, it should say what is missing rather than inventing results.
 
@@ -74,8 +75,18 @@ Key malicious prompts try to force exact repair costs, legal certification, guar
 ## Key Environment Variables
 
 ```bash
+ROADLYTICS_ASSISTANT_PROVIDER=openai_compatible
+ROADLYTICS_ASSISTANT_API_KEY=
+ROADLYTICS_ASSISTANT_BASE_URL=https://api.groq.com/openai/v1
 GEMINI_API_KEY=
-ROADLYTICS_ASSISTANT_MODEL=gemini-2.5-flash
+ROADLYTICS_ASSISTANT_MODEL=llama-3.3-70b-versatile
 ROADLYTICS_ASSISTANT_CHROMA_PATH=/app/backend/data/chroma
 ROADLYTICS_ASSISTANT_MAX_CONTEXT_CHARS=18000
+```
+
+For OpenRouter free models, use:
+
+```bash
+ROADLYTICS_ASSISTANT_BASE_URL=https://openrouter.ai/api/v1
+ROADLYTICS_ASSISTANT_MODEL=meta-llama/llama-3.2-3b-instruct:free
 ```

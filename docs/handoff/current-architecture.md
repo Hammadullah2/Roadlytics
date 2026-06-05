@@ -148,4 +148,4 @@ GET /api/assistant/suggestions
 POST /api/assistant/reindex
 ```
 
-It retrieves from static Roadlytics notes, job metadata, job events, artifact manifests, analytics snapshots, generated report text, visible map layers, and viewport context. It uses ChromaDB with local hash embeddings and Gemini generation when a Gemini API key is configured. Without Gemini it returns extractive fallback answers.
+It retrieves from static Roadlytics notes, job metadata, job events, artifact manifests, analytics snapshots, generated report text, visible map layers, and viewport context. It uses ChromaDB with local hash embeddings. Generation can use Gemini or an OpenAI-compatible provider such as Groq/OpenRouter when configured; otherwise it returns extractive fallback answers.

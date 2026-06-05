@@ -6,11 +6,13 @@ import hashlib
 import html
 import json
 import re
+import urllib.error
+import urllib.request
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Sequence
+from typing import Any, Dict, Iterable, List, Protocol, Sequence
 
 try:  # Optional at import time so local development still starts before deps install.
     import chromadb
@@ -198,6 +200,14 @@ class GeminiClient:
     def available(self) -> bool:
         return bool(self.settings.gemini_api_key) and genai is not None
 
+    @property
+    def provider_name(self) -> str:
+        return "gemini"
+
+    @property
+    def model_name(self) -> str:
+        return self.settings.assistant_model
+
     def generate(self, prompt: str) -> str:
         if not self.settings.gemini_api_key:
             raise RuntimeError("GEMINI_API_KEY is not configured.")
@@ -215,12 +225,104 @@ class GeminiClient:
         return text.strip()
 
 
+class LlmClient(Protocol):
+    @property
+    def available(self) -> bool: ...
+
+    @property
+    def provider_name(self) -> str: ...
+
+    @property
+    def model_name(self) -> str: ...
+
+    def generate(self, prompt: str) -> str: ...
+
+
+class OpenAICompatibleClient:
+    """Small stdlib client for Groq, OpenRouter, and other chat-completions APIs."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    @property
+    def available(self) -> bool:
+        return bool(self.settings.assistant_api_key and self.settings.assistant_base_url)
+
+    @property
+    def provider_name(self) -> str:
+        if "groq.com" in self.settings.assistant_base_url:
+            return "groq"
+        if "openrouter.ai" in self.settings.assistant_base_url:
+            return "openrouter"
+        return "openai-compatible"
+
+    @property
+    def model_name(self) -> str:
+        return self.settings.assistant_model
+
+    def generate(self, prompt: str) -> str:
+        if not self.available:
+            raise RuntimeError(
+                "ROADLYTICS_ASSISTANT_API_KEY and ROADLYTICS_ASSISTANT_BASE_URL are required."
+            )
+
+        endpoint = f"{self.settings.assistant_base_url}/chat/completions"
+        payload = {
+            "model": self.settings.assistant_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are the Roadlytics assistant. Answer only from supplied evidence, "
+                        "stay concise, and keep field-inspection caveats for operational claims."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.2,
+        }
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.settings.assistant_api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "http://52.139.179.111",
+                "X-Title": "Roadlytics",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                body = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(f"{self.provider_name} returned HTTP {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"{self.provider_name} request failed: {exc}") from exc
+
+        choices = body.get("choices") or []
+        if not choices:
+            raise RuntimeError(f"{self.provider_name} returned no choices.")
+        message = choices[0].get("message") or {}
+        text = str(message.get("content") or "").strip()
+        if not text:
+            raise RuntimeError(f"{self.provider_name} returned an empty response.")
+        return text
+
+
+def build_llm_client(settings: Settings) -> LlmClient:
+    if settings.assistant_provider in {"openai", "openai_compatible", "openai-compatible", "groq", "openrouter"}:
+        return OpenAICompatibleClient(settings)
+    return GeminiClient(settings)
+
+
 class AssistantService:
     def __init__(self, settings: Settings, repository: Repository) -> None:
         self.settings = settings
         self.repository = repository
         self.retriever = AssistantRetriever(settings)
-        self.llm = GeminiClient(settings)
+        self.llm = build_llm_client(settings)
 
     def suggestions(self, mode: str | None = None) -> List[str]:
         if mode == "reports":
@@ -255,14 +357,14 @@ class AssistantService:
         try:
             if self.llm.available:
                 answer = self.llm.generate(prompt)
-                provider = "gemini"
-                model = self.settings.assistant_model
+                provider = self.llm.provider_name
+                model = self.llm.model_name
             else:
                 answer = self._fallback_answer(request, chunks)
                 confidence = "low"
         except Exception as exc:
             answer = (
-                "Gemini generation is currently unavailable, so I am answering from the available "
+                f"{self.llm.provider_name.title()} generation is currently unavailable, so I am answering from the available "
                 "Roadlytics evidence instead.\n\n"
                 + self._fallback_answer(request, chunks)
             )
