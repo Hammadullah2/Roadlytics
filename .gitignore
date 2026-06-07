@@ -17,3 +17,8 @@ model_weights/
 *.pth
 *.pt
 *.ckpt
+data/osm_roads/*.cpg
+data/osm_roads/*.dbf
+data/osm_roads/*.prj
+data/osm_roads/*.shp
+data/osm_roads/*.shx

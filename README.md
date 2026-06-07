@@ -222,7 +222,7 @@ PakOSM also expects Pakistan OSM roads data under:
 data/osm_roads/
 ```
 
-The repository includes the shapefile set used for the current MVP demo.
+The large shapefile components are intentionally not committed. Keep `data/osm_roads/README.md` in the repo, then place the `.shp`, `.dbf`, `.shx`, `.prj`, and `.cpg` files locally or fetch them during deployment.
 
 ## Environment Variables
 
